@@ -34,7 +34,7 @@ import java.time.format.DateTimeFormatter
 private val Mint = Color(0xFF64DECB)
 private val Amber = Color(0xFFFFCC80)
 private val Muted = Color(0xFFABC1C7)
-private val theme = darkColorScheme(primary = Mint, onPrimary = Color(0xFF00382F), secondary = Amber,
+private val WerkColors = darkColorScheme(primary = Mint, onPrimary = Color(0xFF00382F), secondary = Amber,
     background = Color(0xFF0C191E), surface = Color(0xFF14262D), surfaceVariant = Color(0xFF20363E), onSurface = Color(0xFFE8F2F3))
 fun stamp(time: Long) = DateTimeFormatter.ofPattern("dd.MM.yyyy · HH:mm").withZone(ZoneId.systemDefault()).format(Instant.ofEpochMilli(time))
 
@@ -58,8 +58,8 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
         enableEdgeToEdge()
-        setContent { MaterialTheme(colorScheme = theme) {
-            Surface(Modifier.fillMaxSize(), color = theme.background) {
+        setContent { MaterialTheme(colorScheme = WerkColors) {
+            Surface(Modifier.fillMaxSize(), color = WerkColors.background) {
                 key(model.session) {
                     if (model.data == null) LockScreen(model, restoreBytes, { restore.launch(arrayOf("*/*")) }, { restoreBytes = null })
                     else Workspace(model, onExport = {
@@ -127,8 +127,8 @@ private fun java.io.InputStream.readBytesLimited(): ByteArray {
     var mail by remember { mutableStateOf<Pair<String, String>?>(null) }
     val tabs = listOf("Heute", "Anlagen", "Journal", "Rundgang", "Mehr")
     val icons = listOf(Icons.Outlined.Dashboard, Icons.Outlined.PrecisionManufacturing, Icons.Outlined.Assignment, Icons.Outlined.Checklist, Icons.Outlined.MoreHoriz)
-    Scaffold(containerColor = theme.background, bottomBar = {
-        NavigationBar(containerColor = theme.surface) { tabs.forEachIndexed { i, title -> NavigationBarItem(selected = page == i, onClick = { page = i }, icon = { Icon(icons[i], title) }, label = { Text(title, fontSize = 10.sp) }) } }
+    Scaffold(containerColor = WerkColors.background, bottomBar = {
+        NavigationBar(containerColor = WerkColors.surface) { tabs.forEachIndexed { i, title -> NavigationBarItem(selected = page == i, onClick = { page = i }, icon = { Icon(icons[i], title) }, label = { Text(title, fontSize = 10.sp) }) } }
     }) { padding ->
         Column(Modifier.fillMaxSize().padding(padding).consumeWindowInsets(padding).verticalScroll(rememberScrollState()).padding(horizontal = 20.dp)) {
             Row(Modifier.fillMaxWidth().padding(top = 16.dp, bottom = 24.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -245,7 +245,7 @@ private fun handover(d: Data) = buildString {
     done.forEach { append("• ${assetName(d, it.assetId)}: ${it.title}\n${it.note}\n") }
 }
 @Composable private fun Metric(value: String, label: String, color: Color = Mint) { Column { Text(value, fontSize = 36.sp, color = color, fontWeight = FontWeight.Bold); Text(label, color = Muted, fontSize = 13.sp) } }
-@Composable private fun Panel(content: @Composable ColumnScope.() -> Unit) { Card(Modifier.fillMaxWidth().padding(bottom = 12.dp), colors = CardDefaults.cardColors(containerColor = theme.surface)) { Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(4.dp), content = content) } }
+@Composable private fun Panel(content: @Composable ColumnScope.() -> Unit) { Card(Modifier.fillMaxWidth().padding(bottom = 12.dp), colors = CardDefaults.cardColors(containerColor = WerkColors.surface)) { Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(4.dp), content = content) } }
 @Composable private fun Section(title: String) { Text(title, fontSize = 18.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 22.dp, bottom = 12.dp)) }
 @Composable private fun Hint(text: String) { Text(text, color = Muted, fontSize = 14.sp, modifier = Modifier.padding(vertical = 12.dp)) }
 @Composable private fun Empty(title: String, body: String, click: () -> Unit) { Panel { Text(title, fontWeight = FontWeight.Bold); Hint(body); TextButton(onClick = click) { Text("Erste Anlage anlegen") } } }
