@@ -28,12 +28,16 @@ Zusätzlich: expliziter verschlüsselter Dateiaustausch zwischen Kollegen, selek
 
 Keine vorgegebenen Sollwerte, Alarmgrenzen oder sicherheitsrelevanten Handlungsempfehlungen. Die App dokumentiert; freigegebene betriebliche Unterlagen und Verfahren bleiben maßgeblich. Datensätze werden nicht automatisch angelegt.
 
+## In 0.3.0 ergänzt
+
+Offline-Zählerfoto-Erkennung mit verpflichtender manueller Bestätigung und ohne Fotoarchiv. Lokaler Kraftwerkkalender mit Fremdfirma, Arbeit und Zuständigem. Allgemeine/anlagenbezogene Anleitungen mit sortierten Schritten und komprimierten Fotos. Bestelllisten mit mehreren Positionen, lokalen Anlagenzuordnungen, Bildanhängen und manueller E-Mail-Übergabe. Mehrere Bilder werden intern verschlüsselt gespeichert, maximal 160 KiB pro Bild und 30 Bilder insgesamt. Vor dem atomaren Speichern validiert die App das neue Datenmodell.
+
 ## Nächste gezielte Ausbaustufen (noch nicht implementiert)
 
-1. Verschlüsselte Fotos und Dokumentanhänge: Typenschild, Fehlerfoto, Schaltplan. Größen-/Exportkonzept zuerst, da Tresor derzeit maximal 8 MiB.
-2. Messpunktvorlagen mit Einheit und Verlaufsgrafik; getrennte Zähler-/Betriebsstundenstände samt Rücksetzereignis.
-3. QR-Einstieg in eine Anlage, Favoriten und Standortstruktur für schnelle Orientierung.
-4. Wiederkehrende Wartungsplanung mit nachvollziehbarer Durchführung statt bloßer Datumsänderung.
-5. Strukturierter Bereitschaftseinsatz: Anruf, Abfahrt, Ankunft, Arbeitsende, Rückkehr; reine Zeitdokumentation ohne tarifliche Bewertung.
-6. Übergabeauswahl und freigegebene PDF-Berichte, weiterhin ohne Zugangsdaten.
-7. Eigene Release-Signierung und Android-Geräteabnahme vor echtem Einsatz. Keine Zusage rechtssicherer oder revisionssicherer Dokumentation.
+1. Eigene dauerhafte Release-Signierung und Android-Geräteabnahme, besonders Kamera, OCR, Dateiaustausch und Mail-Anhänge.
+2. Messpunktvorlagen, Zählerwechsel-Logik und Verlaufsgrafik.
+3. QR-Einstieg in eine Anlage, Favoriten und Standortstruktur.
+4. Wiederkehrende Wartungsplanung und optionale lokale Benachrichtigungen.
+5. Strukturierter Bereitschaftseinsatz: Anruf, Abfahrt, Ankunft, Arbeitsende, Rückkehr; ohne tarifliche Bewertung.
+6. Freigegebene PDF-Berichte und PDF-Anlagen, weiterhin ohne automatische Zugangsdatenübernahme.
+7. iOS-Portierung mit gemeinsamem Daten-/Kryptoformat, eigener Apple-Plattformintegration und eigenen Tests.

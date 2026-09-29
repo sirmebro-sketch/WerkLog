@@ -47,6 +47,25 @@ private val WerkColors = darkColorScheme(primary = Mint, onPrimary = Color(0xFF0
 
 class MainActivity : ComponentActivity() {
     private val model: WorkModel by viewModels()
+    private var sourceTarget by mutableStateOf<PhotoTarget?>(null)
+    private val gallery = registerForActivityResult(ActivityResultContracts.GetContent()) { uri ->
+        val target = photoTarget; photoTarget = null
+        if (uri != null && target != null) lifecycleScope.launch {
+            var file: File? = null
+            try {
+                val copied = withContext(Dispatchers.IO) {
+                    val folder = File(cacheDir, "camera").also { it.mkdirs() }
+                    val output = File(folder, "import-${newId()}.jpg"); file = output
+                    contentResolver.openInputStream(uri)?.use { input -> output.outputStream().use { out ->
+                        val buffer = ByteArray(8192); var total = 0L
+                        while (true) { val n = input.read(buffer); if (n < 0) break; total += n; require(total <= 64L * 1024 * 1024); out.write(buffer, 0, n) }
+                    } } ?: error("Kein Zugriff")
+                    output
+                }
+                readyPhoto = copied to target
+            } catch (_: Exception) { file?.delete(); model.error = "Bild nicht lesbar oder größer als 64 MB." }
+        }
+    }
     private var photoFile: File? = null
     private var photoTarget: PhotoTarget? = null
     private var readyPhoto by mutableStateOf<Pair<File, PhotoTarget>?>(null)
@@ -84,7 +103,7 @@ class MainActivity : ComponentActivity() {
                     else Workspace(model, onExport = {
                         runCatching { pendingBackup = model.backup(); export.launch("WerkLog-${java.time.LocalDate.now()}.werklog") }
                             .onFailure { model.error = "Sicherung konnte nicht geöffnet werden." }
-                    }, onShare = ::share, onShareFile = ::shareFile, onImport = { importAsset.launch(arrayOf("*/*")) }, onPhoto = ::takePhoto, onOrder = ::sendOrder)
+                    }, onShare = ::share, onShareFile = ::shareFile, onImport = { importAsset.launch(arrayOf("*/*")) }, onPhoto = ::requestPhoto, onOrder = ::sendOrder)
                     if (model.data != null && readyPhoto != null) {
                         val pending = readyPhoto!!
                         PhotoReview(pending.first, pending.second, model.data!!, model.busy, { pending.first.delete(); readyPhoto = null }) { next ->
@@ -95,12 +114,16 @@ class MainActivity : ComponentActivity() {
                         model.data?.let { model.update(importPackage(it, incoming)) }
                     }
                 }
+                sourceTarget?.let { target -> AlertDialog(onDismissRequest = { sourceTarget = null }, title = { Text("Bild hinzufügen") },
+                    text = { Text("Das Bild wird verkleinert und verschlüsselt gespeichert. Bei Galerieauswahl bleibt das Original in deiner Galerie unverändert.") },
+                    confirmButton = { TextButton(onClick = { sourceTarget = null; takePhoto(target) }) { Text("Kamera") } },
+                    dismissButton = { TextButton(onClick = { sourceTarget = null; photoTarget = target; gallery.launch("image/*") }) { Text("Bild auswählen") } }) }
                 model.error?.let { message -> AlertDialog(onDismissRequest = { model.error = null }, title = { Text("Hinweis") },
                     text = { Text(message) }, confirmButton = { TextButton(onClick = { model.error = null }) { Text("Verstanden") } }) }
             }
         } }
     }
-    override fun onStop() { super.onStop(); model.lock() }
+    override fun onStop() { super.onStop(); sourceTarget = null; model.lock() }
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent); setIntent(intent); model.lock(); receiveShare(intent)
     }
@@ -118,6 +141,7 @@ class MainActivity : ComponentActivity() {
             } catch (_: Exception) { model.error = "Keine gültige Anlagenfreigabe oder Datei größer als 8 MB." }
         }
     }
+    private fun requestPhoto(target: PhotoTarget) { if (target.kind == "meter") takePhoto(target) else sourceTarget = target }
     private fun takePhoto(target: PhotoTarget) {
         try {
             val folder = File(cacheDir, "camera").also { it.mkdirs() }

@@ -65,9 +65,9 @@ class WorkModel(app: Application) : AndroidViewModel(app) {
         busy = true
         viewModelScope.launch {
             try {
-                withContext(Dispatchers.IO) { val raw = encode(next); try { write(Vault.encrypt(raw, k, s)) } finally { raw.fill(0) } }
+                withContext(Dispatchers.IO) { val raw = encode(next); try { require(raw.size < Vault.MAX_BYTES - 64); decode(raw); write(Vault.encrypt(raw, k, s)) } finally { raw.fill(0) } }
                 if (generation == attempt) data = next
-            } catch (_: Exception) { error = "Speichern fehlgeschlagen. Änderung wurde nicht übernommen." }
+            } catch (_: Exception) { error = "Speichern fehlgeschlagen. Änderung wurde nicht übernommen. Daten- und Bildlimit prüfen." }
             finally { k.fill(0); busy = false }
         }
     }

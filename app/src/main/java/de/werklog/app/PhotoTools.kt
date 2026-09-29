@@ -27,7 +27,7 @@ private fun decodeCamera(file: File, maximum: Int): Bitmap {
     val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }; BitmapFactory.decodeFile(file.path, bounds)
     require(bounds.outWidth in 1..30000 && bounds.outHeight in 1..30000)
     val options = BitmapFactory.Options(); var sample = 1
-    while (maxOf(bounds.outWidth, bounds.outHeight) / sample > maximum * 2) sample *= 2
+    while (maxOf(bounds.outWidth, bounds.outHeight) / sample > maximum) sample *= 2
     options.inSampleSize = sample
     val original = BitmapFactory.decodeFile(file.path, options) ?: error("Bild nicht lesbar")
     val exif = ExifInterface(file)

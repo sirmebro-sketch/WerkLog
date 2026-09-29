@@ -49,3 +49,19 @@ Nicht mit echten sensiblen Betriebsdaten testen, solange Schutz und Freigaben of
 - [ ] Abbruch sowie App-Wechsel während Entschlüsseln zeigen keine Vorschau nach erneutem Entsperren.
 - [ ] Import mit gleichem Anlagennamen erzeugt neue Kopie; vorhandene Daten unverändert.
 - [ ] Große Schrift / kleine Displays: Vorschau und Code vollständig lesbar.
+
+## Zusätzliche Geräteabnahme 0.3.0
+
+- [ ] Kaltstart im Flugmodus: OCR ohne vorherigen Modell-Download verfügbar.
+- [ ] Zwei Zähler an verschiedenen Anlagen: Foto, korrekte Zuordnung, führende Nullen/Nachkomma prüfen; absichtliche manuelle Bestätigung.
+- [ ] Unlesbares Foto → manueller Wert; keine automatische Speicherung.
+- [ ] Kameraabbruch, Prozessende, Rotation und Rückkehr: temporäre Bilder gelöscht, kein Absturz, ggf. verständliche Wiederholung.
+- [ ] Anleitungsfoto im Hoch-/Querformat, große Aufnahme: Orientierung korrekt, Bild klein und nach Neustart vorhanden.
+- [ ] Schritt ergänzen, bearbeiten, nach oben verschieben, mit/ohne Bild; allgemeine und anlagenbezogene Anleitung.
+- [ ] 30-Bilder-/8-MiB-Limit: Speichern eines übergroßen Imports erhält den alten gültigen Stand.
+- [ ] Kalender Monatswechsel, heutiger Tag, mehrere Termine, Fremdfirma, Kontakt, Zuständiger, Abgesagt/Erledigt.
+- [ ] Bestellliste mit mehreren Positionen, Bildern, lokaler Anlagenzuordnung; E-Mail-Vorschau und tatsächliche Anhänge in verwendeter Mail-App prüfen.
+- [ ] Mail-Entwurf nicht abgesendet: in WerkLog niemals als automatisch bestellt/gesendet markiert.
+- [ ] Bestellanhang nach 15 Minuten/Prozessende ggf. erneut erstellen; keine Klartextbilder im lokalen Dateiverzeichnis.
+- [ ] Schema-1-/Schema-2-Backups importieren; Schema-3-Backup mit allen neuen Modulen wiederherstellen.
+- [ ] Anlagenfreigabe mit bebilderter Anleitung/Zählermessungen auf zweiter 0.3.0-Installation importieren.
