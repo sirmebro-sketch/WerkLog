@@ -1,0 +1,45 @@
+name: Signierte Android-Version
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@v3
+        with:
+          packages: 'platform-tools platforms;android-35 build-tools;35.0.0'
+          log-accepted-android-sdk-licenses: false
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+          cache-disabled: true
+      - name: Signaturschlüssel bereitstellen
+        env:
+          SIGNING_BYTES: ${{ secrets.WERKLOG_KEYSTORE_B64 }}
+        run: |
+          test -n "$SIGNING_BYTES" || { echo 'WERKLOG_KEYSTORE_B64 fehlt. Siehe docs/RELEASE-SIGNING.md'; exit 1; }
+          printf '%s' "$SIGNING_BYTES" | base64 --decode > "$RUNNER_TEMP/werklog-release.jks"
+      - name: Prüfen und signieren
+        env:
+          WERKLOG_KEYSTORE: ${{ runner.temp }}/werklog-release.jks
+          WERKLOG_STORE_PASSWORD: ${{ secrets.WERKLOG_STORE_PASSWORD }}
+          WERKLOG_KEY_PASSWORD: ${{ secrets.WERKLOG_KEY_PASSWORD }}
+        run: gradle --no-daemon testReleaseUnitTest lintRelease assembleRelease bundleRelease
+      - uses: actions/upload-artifact@v4
+        with:
+          name: WerkLog-signiert
+          path: |
+            app/build/outputs/apk/release/*.apk
+            app/build/outputs/bundle/release/*.aab
+          retention-days: 3
+      - name: Schlüssel entfernen
+        if: always()
+        run: rm -f "$RUNNER_TEMP/werklog-release.jks"

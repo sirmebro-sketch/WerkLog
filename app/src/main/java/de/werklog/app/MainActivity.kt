@@ -240,6 +240,7 @@ private fun java.io.InputStream.readBytesLimited(): ByteArray {
     var preselectedAssetId by remember { mutableStateOf<String?>(null) }
     var editAsset by remember { mutableStateOf<Asset?>(null) }
     var editEntry by remember { mutableStateOf<Entry?>(null) }
+    var editReading by remember { mutableStateOf<Reading?>(null) }
     var editRound by remember { mutableStateOf<Round?>(null) }
     var removal by remember { mutableStateOf<Pair<String, String>?>(null) }
     var run by remember { mutableStateOf<Round?>(null) }
@@ -263,7 +264,9 @@ private fun java.io.InputStream.readBytesLimited(): ByteArray {
             NavigationBarItem(selected = page == 5, onClick = { page = 5; tool = null }, icon = { Icon(Icons.Outlined.Settings, "Einstellung") }, label = { Text("Einstellung") })
         }
     }) { padding ->
-        Column(Modifier.fillMaxSize().padding(padding).consumeWindowInsets(padding).verticalScroll(rememberScrollState()).padding(horizontal = 20.dp)) {
+        val scroll = rememberScrollState()
+        LaunchedEffect(page, tool, selectedAssetId) { scroll.scrollTo(0) }
+        Column(Modifier.fillMaxSize().padding(padding).consumeWindowInsets(padding).verticalScroll(scroll).padding(horizontal = 20.dp)) {
             Row(Modifier.fillMaxWidth().padding(top = 16.dp, bottom = 24.dp), verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) { Text("WERKLOG  /  LOKAL", color = Mint, fontSize = 11.sp, fontWeight = FontWeight.Bold); Text(if (page == 4 && tool != null) tool!! else titles[page], fontSize = 30.sp, fontWeight = FontWeight.Bold) }
                 IconButton(onClick = { model.lock() }) { Icon(Icons.Outlined.Lock, "App sperren", tint = Mint) }
@@ -283,7 +286,7 @@ private fun java.io.InputStream.readBytesLimited(): ByteArray {
                     }
                     Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                         Button(onClick = { editEntry = null; preselectedAssetId = null; dialog = "entry" }, modifier = Modifier.weight(1f), enabled = d.assets.isNotEmpty() && !model.busy) { Text("+ Störung") }
-                        OutlinedButton(onClick = { preselectedAssetId = null; dialog = "reading" }, modifier = Modifier.weight(1f), enabled = d.assets.isNotEmpty() && !model.busy) { Text("+ Messwert") }
+                        OutlinedButton(onClick = { editReading = null; preselectedAssetId = null; dialog = "reading" }, modifier = Modifier.weight(1f), enabled = d.assets.isNotEmpty() && !model.busy) { Text("+ Messwert") }
                     }
                     Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                         OutlinedButton(onClick = { page = 4; tool = "Zähler" }, modifier = Modifier.weight(1f)) { Text("Zähler ablesen") }
@@ -319,7 +322,7 @@ private fun java.io.InputStream.readBytesLimited(): ByteArray {
                         AssetDetails(selected, d, model.busy, { selectedAssetId = null }, { editAsset = selected; dialog = "asset" },
                             { next -> model.update(next) },
                             { editEntry = null; preselectedAssetId = selected.id; dialog = "entry" },
-                            { preselectedAssetId = selected.id; dialog = "reading" },
+                            { editReading = null; preselectedAssetId = selected.id; dialog = "reading" },
                             { e -> editEntry = e; dialog = "entry" }, onShareFile)
                     } else {
                         var query by remember { mutableStateOf("") }
@@ -348,13 +351,14 @@ private fun java.io.InputStream.readBytesLimited(): ByteArray {
                         if (list.isEmpty()) Hint("Keine passenden Einträge.")
                         list.forEach { e -> EntryCard(e, d, { editEntry = e; dialog = "entry" }) }
                     } else {
-                        Button(onClick = { preselectedAssetId = null; dialog = "reading" }, enabled = d.assets.isNotEmpty() && !model.busy) { Text("+ Messwert erfassen") }
+                        Button(onClick = { editReading = null; preselectedAssetId = null; dialog = "reading" }, enabled = d.assets.isNotEmpty() && !model.busy) { Text("+ Messwert erfassen") }
                         val list = d.readings.filter { "${it.label} ${assetName(d, it.assetId)}".contains(query, true) }.sortedByDescending { it.created }
                         if (list.isEmpty()) Hint("Noch keine passenden Messwerte. Es werden keine Grenzwerte oder automatischen Sicherheitsbewertungen angenommen.")
                         list.forEach { r -> Panel {
                             Text(assetName(d, r.assetId), color = Mint, fontSize = 12.sp); Text(r.label, fontWeight = FontWeight.Bold)
                             Text("${r.value} ${r.unit}", fontSize = 28.sp); Text(stamp(r.created), color = Muted, fontSize = 12.sp)
                             if (r.note.isNotBlank()) Text(r.note)
+                            TextButton(onClick = { editReading = r; dialog = "reading" }, enabled = !model.busy) { Text("Messwert korrigieren") }
                             TextButton(onClick = { removal = "reading" to r.id }, enabled = !model.busy) { Text("Messwert löschen") }
                         } }
                     }
@@ -422,7 +426,7 @@ private fun java.io.InputStream.readBytesLimited(): ByteArray {
     }, { e ->
         model.update(d.copy(work = d.work.copy(appointments = d.work.appointments + Appointment(title = e.title, start = formatAppointment(java.time.LocalDate.now().plusDays(1).atTime(8, 0)), assetId = e.assetId, note = e.note)))); dialog = null; page = 4; tool = "Kalender"
     }) { e -> model.update(d.copy(entries = d.entries.filterNot { it.id == e.id } + e)); dialog = null }
-    if (dialog == "reading") ReadingEditor(d.assets, preselectedAssetId, { dialog = null }) { r -> model.update(d.copy(readings = d.readings + r)); dialog = null }
+    if (dialog == "reading") ReadingEditor(editReading, d.assets, preselectedAssetId, { dialog = null }) { r -> model.update(d.copy(readings = d.readings.filterNot { it.id == r.id } + r)); dialog = null }
     if (dialog == "round") RoundEditor(editRound, { dialog = null }) { r -> model.update(d.copy(rounds = d.rounds.filterNot { it.id == r.id } + r)); dialog = null }
     removal?.let { (kind, id) -> ConfirmRemoval("Eintrag löschen?", "Dieser lokale Eintrag wird entfernt. Bereits erstellte Sicherungen und abgeschlossene Rundgänge bleiben unverändert.", model.busy, { removal = null }) {
         model.update(when (kind) {
@@ -490,13 +494,13 @@ private fun java.io.InputStream.readBytesLimited(): ByteArray {
         if (existing != null) TextButton(onClick = { save(existing.copy(id = newId(), title = "$title (Kopie)", note = note, status = "Offen", created = System.currentTimeMillis(), updated = System.currentTimeMillis(), minutes = 0)) }) { Text("Als neue Tätigkeit duplizieren") }
     }
 }
-@Composable private fun ReadingEditor(assets: List<Asset>, initialAssetId: String?, close: () -> Unit, save: (Reading) -> Unit) {
-    var asset by remember { mutableStateOf(initialAssetId ?: assets.firstOrNull()?.id.orEmpty()) }; var label by remember { mutableStateOf("") }
-    var value by remember { mutableStateOf("") }; var unit by remember { mutableStateOf("bar") }; var note by remember { mutableStateOf("") }
+@Composable private fun ReadingEditor(existing: Reading?, assets: List<Asset>, initialAssetId: String?, close: () -> Unit, save: (Reading) -> Unit) {
+    var asset by remember { mutableStateOf(existing?.assetId ?: initialAssetId ?: assets.firstOrNull()?.id.orEmpty()) }; var label by remember { mutableStateOf(existing?.label ?: "") }
+    var value by remember { mutableStateOf(existing?.value?.toString() ?: "") }; var unit by remember { mutableStateOf(existing?.unit ?: "bar") }; var note by remember { mutableStateOf(existing?.note ?: "") }
     Form("Messwert erfassen", asset.isNotEmpty() && label.isNotBlank() && number(value) != null && unit.isNotBlank(), close, {
-        save(Reading(assetId = asset, label = label.trim(), value = number(value)!!, unit = unit.trim(), note = note.trim()))
-    }) { Picker("Anlage", assets.map { it.id to it.name }, asset) { asset = it }; Field(label, { label = it }, "Messpunkt *")
-        Field(value, { value = it }, "Messwert *", numeric = true); Field(unit, { unit = it }, "Einheit *"); Field(note, { note = it }, "Beobachtung", 2) }
+        save(if (existing == null) Reading(assetId = asset, label = label.trim(), value = number(value)!!, unit = unit.trim(), note = note.trim()) else existing.copy(value = number(value)!!, note = note.trim()))
+    }) { if (existing == null) { Picker("Anlage", assets.map { it.id to it.name }, asset) { asset = it }; Field(label, { label = it }, "Messpunkt *") } else Text("${existing.label} · ${existing.unit} · ursprünglicher Zeitpunkt bleibt erhalten")
+        Field(value, { value = it }, "Messwert *", numeric = true); if (existing == null) Field(unit, { unit = it }, "Einheit *"); Field(note, { note = it }, "Beobachtung", 2) }
 }
 @Composable private fun RoundEditor(existing: Round?, close: () -> Unit, save: (Round) -> Unit) {
     var title by remember { mutableStateOf(existing?.title ?: "") }; var points by remember { mutableStateOf(existing?.checks?.joinToString("\n") ?: "") }

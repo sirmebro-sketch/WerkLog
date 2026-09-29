@@ -69,7 +69,7 @@ fun validateWork(w: WorkData, assetIds: Set<String>) {
 fun attachImage(data: Data, target: PhotoTarget, image: String): Data {
     val w = data.work
     val next = when (target.kind) {
-        "guide" -> { require(w.guides.any { it.steps.any { s -> s.id == target.id } }); w.copy(guides = w.guides.map { g -> g.copy(steps = g.steps.map { if (it.id == target.id) it.copy(image = image) else it }) }) }
+        "guide" -> { require(w.guides.any { it.steps.any { s -> s.id == target.id } }); w.copy(guides = w.guides.map { g -> g.copy(revision = if (g.steps.any { it.id == target.id }) g.revision + 1 else g.revision, checked = if (g.steps.any { it.id == target.id }) "" else g.checked, steps = g.steps.map { if (it.id == target.id) it.copy(image = image) else it }) }) }
         "order" -> { require(w.orders.any { it.items.any { x -> x.id == target.id } }); w.copy(orders = w.orders.map { o -> o.copy(items = o.items.map { if (it.id == target.id) it.copy(image = image) else it }) }) }
         else -> error("Unbekanntes Bildziel")
     }

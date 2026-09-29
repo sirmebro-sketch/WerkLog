@@ -141,7 +141,11 @@ import java.util.Locale
     var deletion by remember { mutableStateOf<GuideStep?>(null) }
     var deleteGuide by remember { mutableStateOf(false) }
     val guide = d.work.guides.find { it.id == selected }
-    fun update(next: Guide) = save(d.copy(work = d.work.copy(guides = d.work.guides.filterNot { it.id == next.id } + next.copy(revision = (d.work.guides.find { it.id == next.id }?.revision ?: 0) + 1))))
+    fun update(next: Guide) {
+        val previous = d.work.guides.find { it.id == next.id }
+        val contentChanged = previous != null && (previous.title != next.title || previous.steps != next.steps || previous.assetId != next.assetId)
+        save(d.copy(work = d.work.copy(guides = d.work.guides.filterNot { it.id == next.id } + next.copy(revision = (previous?.revision ?: 0) + 1, checked = if (contentChanged) "" else next.checked))))
+    }
     Section("Eigene Anleitungen")
     if (guide == null) {
         Hint("Schrittfolgen für wiederkehrende Arbeiten, optional einer Anlage zugeordnet. Eigene Notizen ersetzen keine freigegebenen Betriebsanweisungen.")

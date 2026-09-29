@@ -19,12 +19,12 @@ fun occurrences(event: Appointment, from: LocalDate, to: LocalDate): List<Appoin
     return result
 }
 fun meterWarning(meter: Meter, previous: Reading?, value: Double, reset: Boolean): String? {
-    if (reset) return null
+    if (reset || (previous != null && previous.unit != meter.unit)) return null
     if (previous != null && value < previous.value) return "Stand kleiner als zuvor. Eingabe prüfen oder Zählerwechsel markieren."
     if (previous != null && meter.maxDelta != null && value - previous.value > meter.maxDelta) return "Differenz überschreitet deine hinterlegte Prüfgrenze (${meter.maxDelta} ${meter.unit})."
     return null
 }
-fun readingDelta(reading: Reading, previous: Reading?): Double? = if (previous == null || reading.reset || reading.value < previous.value) null else reading.value - previous.value
+fun readingDelta(reading: Reading, previous: Reading?): Double? = if (previous == null || reading.unit != previous.unit || reading.reset || reading.value < previous.value) null else reading.value - previous.value
 fun searchAssets(d: Data, query: String): List<Asset> = d.assets.filter { a ->
     val text = listOf(a.name, a.tag, a.location, a.trade, a.manufacturer, a.model, a.serial, a.note) +
         d.infos.filter { it.assetId == a.id }.flatMap { listOf(it.title, it.body) } +

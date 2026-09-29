@@ -85,13 +85,18 @@ class WorkModel(app: Application) : AndroidViewModel(app) {
                 val result = withContext(Dispatchers.IO) {
                     val candidate = if (target == null) importPackage(current, opened.data) else mergePackage(current, opened.data, target, replace)
                     validateWork(candidate.work, candidate.assets.map { it.id }.toSet())
-                    val used = imageValues(candidate).toSet()
                     val replacements = mutableMapOf<String, String>()
-                    for (image in imageValues(opened.data).filter { it.isNotEmpty() && it in used }.distinct()) {
+                    for (image in imageValues(opened.data).filter { it.isNotEmpty() }.distinct()) {
                         val bytes = opened.image(image)
                         try { replacements[image] = repository.addImage(bytes, k) } finally { bytes.fill(0) }
                     }
-                    repository.save(mapImages(candidate) { replacements[it] ?: it }, k, s)
+                    val localized = mapImages(opened.data) { replacements[it] ?: it }
+                    val next = if (target == null) {
+                        // Reuse the single generated copy identity from the validated preview.
+                        val id = candidate.assets.last().id
+                        mergePackage(current.copy(assets = candidate.assets), localized, id, false)
+                    } else mergePackage(current, localized, target, replace)
+                    repository.save(next, k, s)
                 }
                 if (attempt == generation) data = result
             } catch (_: Exception) { error = "Import fehlgeschlagen. Bildlimit oder freien Speicher prüfen. Bestehende Einträge bleiben erhalten." }

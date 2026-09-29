@@ -73,14 +73,3 @@ fun importPackage(current: Data, incoming: Data): Data {
     val old = incoming.assets.single(); val id = newId()
     return mergePackage(current.copy(assets = current.assets + old.copy(id = id, name = "${old.name} (Import)", parentId = "", favorite = false, lastOpened = 0)), incoming, id, false)
 }
-
-suspend fun hydrateImages(data: Data, load: suspend (String) -> ByteArray): Data {
-    val replacements = mutableMapOf<String, String>()
-    var total = 0L
-    for (ref in imageValues(data).filter(::isImageRef).distinct()) {
-        val bytes = load(ref)
-        try { total += bytes.size * 4L / 3L; require(total < Vault.MAX_BYTES - 1024 * 1024) { "Paket zu groß; einzelne Anleitungen teilen" }; replacements[ref] = java.util.Base64.getEncoder().encodeToString(bytes) }
-        finally { bytes.fill(0) }
-    }
-    return mapImages(data) { replacements[it] ?: it }
-}
