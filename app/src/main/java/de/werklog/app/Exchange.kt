@@ -49,7 +49,7 @@ object Exchange {
                 require(j.getString("format") == "WerkLog-Anlagenpaket" && j.getInt("version") == 1)
                 return decode(j.getJSONObject("data").toString().toByteArray(Charsets.UTF_8)).also {
                     require(imageValues(it).none(::isImageRef))
-                    require(it.assets.size == 1 && it.rounds.isEmpty() && it.runs.isEmpty() && it.work.orders.isEmpty() && it.work.appointments.isEmpty())
+                    require(it.assets.size == 1 && it.rounds.isEmpty() && it.runs.isEmpty() && it.work.orders.isEmpty() && it.work.appointments.isEmpty() && it.work.templates.isEmpty())
                     require(it.work.guides.all { g -> g.assetId == it.assets.single().id })
                 }
             } finally { raw.fill(0) }

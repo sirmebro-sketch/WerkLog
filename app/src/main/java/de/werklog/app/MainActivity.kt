@@ -46,6 +46,14 @@ private val WerkColors = darkColorScheme(primary = Mint, onPrimary = Color(0xFF0
     background = Color(0xFF0C191E), surface = Color(0xFF14262D), surfaceVariant = Color(0xFF20363E), onSurface = Color(0xFFE8F2F3))
 
 class MainActivity : androidx.fragment.app.FragmentActivity() {
+    private var handoffUntil = 0L
+    private var transferScopes = 0
+    private var backgroundLock: kotlinx.coroutines.Job? = null
+    private var backgroundDeadline = 0L
+    private val screenOff = object : android.content.BroadcastReceiver() {
+        override fun onReceive(context: android.content.Context, intent: Intent) { handoffUntil = 0; backgroundLock?.cancel(); model.lock() }
+    }
+    private fun beginHandoff() { if (model.data != null) handoffUntil = android.os.SystemClock.elapsedRealtime() + 120_000 }
     private val biometric by lazy { BiometricLock(this) }
     private val notifications = registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted -> if (!granted) model.error = "Benachrichtigungen sind deaktiviert. Termine bleiben im lokalen Kalender sichtbar." }
     fun enableReminders() { if (android.os.Build.VERSION.SDK_INT >= 33) notifications.launch(android.Manifest.permission.POST_NOTIFICATIONS) }
@@ -102,21 +110,22 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
+        androidx.core.content.ContextCompat.registerReceiver(this, screenOff, android.content.IntentFilter(Intent.ACTION_SCREEN_OFF), androidx.core.content.ContextCompat.RECEIVER_NOT_EXPORTED)
         enableEdgeToEdge()
         receiveShare(intent)
         File(cacheDir, "camera").listFiles()?.forEach { it.delete() }
         File(cacheDir, "shares").listFiles()?.filter { System.currentTimeMillis() - it.lastModified() > 86_400_000 }?.forEach { it.delete() }
-        setContent { CompositionLocalProvider(LocalImageLoader provides { value -> model.image(value) }) { MaterialTheme(colorScheme = WerkColors) {
+        setContent { CompositionLocalProvider(LocalImageLoader provides { value -> model.image(value) }, LocalTransferScope provides { active -> transferScopes = (transferScopes + if (active) 1 else -1).coerceAtLeast(0) }) { MaterialTheme(colorScheme = WerkColors) {
             Surface(Modifier.fillMaxSize(), color = WerkColors.background) {
                 key(model.session) {
                     if (model.data == null) LockScreen(model, restoreBytes, { restore.launch(arrayOf("*/*")) }, { restoreBytes = null })
                     else Workspace(model, onExport = {
                         lifecycleScope.launch {
                             val file = File(cacheDir, "backup-${newId()}.werklog")
-                            try { model.backup(file); pendingBackup = file; export.launch("WerkLog-${java.time.LocalDate.now()}.werklog") }
+                            try { model.backup(file); pendingBackup = file; beginHandoff(); export.launch("WerkLog-${java.time.LocalDate.now()}.werklog") }
                             catch (_: Exception) { file.delete(); model.error = "Sicherung konnte nicht erstellt werden." }
                         }
-                    }, onShare = ::share, onShareFile = ::shareFile, onImport = { importAsset.launch(arrayOf("*/*")) }, onPhoto = ::requestPhoto, onOrder = ::sendOrder, requestedAsset = requestedAsset, assetOpened = { requestedAsset = null })
+                    }, onShare = ::share, onShareFile = ::shareFile, onImport = { beginHandoff(); importAsset.launch(arrayOf("*/*")) }, onPhoto = ::requestPhoto, onOrder = ::sendOrder, requestedAsset = requestedAsset, assetOpened = { requestedAsset = null })
                     if (model.data != null && readyPhoto != null) {
                         val pending = readyPhoto!!
                         PhotoReview(pending.first, pending.second, model.data!!, model.busy, { pending.first.delete(); readyPhoto = null }, { requestedAsset = it; readyPhoto = null }) { next ->
@@ -128,15 +137,34 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
                 sourceTarget?.let { target -> AlertDialog(onDismissRequest = { sourceTarget = null }, title = { Text("Bild hinzufügen") },
                     text = { Text("Das Bild wird verkleinert und verschlüsselt gespeichert. Bei Galerieauswahl bleibt das Original in deiner Galerie unverändert.") },
                     confirmButton = { TextButton(onClick = { sourceTarget = null; takePhoto(target) }) { Text("Kamera") } },
-                    dismissButton = { TextButton(onClick = { sourceTarget = null; photoTarget = target; gallery.launch("image/*") }) { Text("Bild auswählen") } }) }
+                    dismissButton = { TextButton(onClick = { sourceTarget = null; photoTarget = target; beginHandoff(); gallery.launch("image/*") }) { Text("Bild auswählen") } }) }
                 model.error?.let { message -> AlertDialog(onDismissRequest = { model.error = null }, title = { Text("Hinweis") },
                     text = { Text(message) }, confirmButton = { TextButton(onClick = { model.error = null }) { Text("Verstanden") } }) }
             }
         } } }
     }
-    override fun onStop() { super.onStop(); sourceTarget = null; model.lock() }
+    override fun onStop() {
+        super.onStop(); sourceTarget = null
+        val now = android.os.SystemClock.elapsedRealtime()
+        val deviceLocked = getSystemService(android.app.KeyguardManager::class.java).isDeviceLocked
+        if (model.data != null && !deviceLocked && (transferScopes > 0 || handoffUntil > now)) {
+            backgroundDeadline = if (transferScopes > 0) now + 120_000 else handoffUntil
+            backgroundLock?.cancel()
+            backgroundLock = lifecycleScope.launch { kotlinx.coroutines.delay((backgroundDeadline - now).coerceAtLeast(0)); handoffUntil = 0; model.lock() }
+        } else { backgroundDeadline = 0; handoffUntil = 0; model.lock() }
+    }
+    override fun onStart() {
+        super.onStart()
+        if (backgroundDeadline > 0 && android.os.SystemClock.elapsedRealtime() >= backgroundDeadline) model.lock()
+        backgroundLock?.cancel(); backgroundDeadline = 0
+    }
+    override fun onDestroy() {
+        unregisterReceiver(screenOff)
+        if (!isChangingConfigurations) model.lock()
+        super.onDestroy()
+    }
     override fun onNewIntent(intent: Intent) {
-        super.onNewIntent(intent); setIntent(intent); model.lock(); receiveShare(intent)
+        super.onNewIntent(intent); setIntent(intent); receiveShare(intent)
     }
     private fun receiveShare(intent: Intent?) {
         if (intent?.action == Intent.ACTION_VIEW) intent.data?.let(::readShare)
@@ -157,6 +185,7 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
             val folder = File(cacheDir, "camera").also { it.mkdirs() }
             val file = File(folder, "capture-${newId()}.jpg")
             photoFile = file; photoTarget = target
+            beginHandoff()
             camera.launch(FileProvider.getUriForFile(this, "$packageName.files", file))
         } catch (_: Exception) { photoFile?.delete(); photoFile = null; photoTarget = null; model.error = "Keine Kamera verfügbar. Einträge können weiterhin manuell erfasst werden." }
     }
@@ -182,6 +211,7 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
                 .putExtra(Intent.EXTRA_TEXT, "Verschlüsselte WerkLog-Freigabe. Den Code übermittle ich separat.")
                 .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
             intent.clipData = ClipData.newRawUri("WerkLog-Anlagenfreigabe", uri)
+            beginHandoff()
             startActivity(Intent.createChooser(intent, "Verschlüsselte Datei teilen"))
         } catch (_: Exception) { model.error = "Datei konnte nicht geteilt werden. Freigabe bitte erneut erstellen." }
     }
@@ -253,7 +283,12 @@ private fun java.io.InputStream.readBytesLimited(): ByteArray {
     val tourPrefs = context.getSharedPreferences("onboarding", 0)
     var tour by remember { mutableIntStateOf(if (tourPrefs.getBoolean("done-v1", false)) -1 else 0) }
     BackHandler(enabled = page != 0 && dialog == null && selectedAssetId == null && tool == null) { page = if (page in 1..3) 4 else 0 }
-    Scaffold(containerColor = WerkColors.background, bottomBar = {
+    Scaffold(containerColor = WerkColors.background, topBar = {
+            Row(Modifier.fillMaxWidth().statusBarsPadding().padding(horizontal = 20.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) { Text("WERKLOG  /  LOKAL", color = Mint, fontSize = 11.sp, fontWeight = FontWeight.Bold); Text(if (page == 4 && tool != null) tool!! else titles[page], fontSize = 30.sp, fontWeight = FontWeight.Bold) }
+                IconButton(onClick = { model.lock() }) { Icon(Icons.Outlined.Lock, "App sperren", tint = Mint) }
+            }
+    }, bottomBar = {
         NavigationBar(containerColor = WerkColors.surface) {
             NavigationBarItem(selected = page == 0, onClick = { page = 0; tool = null }, icon = { Icon(Icons.Outlined.Today, "Heute") }, label = { Text("Heute") })
             NavigationBarItem(selected = page in 1..4, onClick = { page = 4; tool = null; selectedAssetId = null }, icon = {
@@ -267,10 +302,6 @@ private fun java.io.InputStream.readBytesLimited(): ByteArray {
         val scroll = rememberScrollState()
         LaunchedEffect(page, tool, selectedAssetId) { scroll.scrollTo(0) }
         Column(Modifier.fillMaxSize().padding(padding).consumeWindowInsets(padding).verticalScroll(scroll).padding(horizontal = 20.dp)) {
-            Row(Modifier.fillMaxWidth().padding(top = 16.dp, bottom = 24.dp), verticalAlignment = Alignment.CenterVertically) {
-                Column(Modifier.weight(1f)) { Text("WERKLOG  /  LOKAL", color = Mint, fontSize = 11.sp, fontWeight = FontWeight.Bold); Text(if (page == 4 && tool != null) tool!! else titles[page], fontSize = 30.sp, fontWeight = FontWeight.Bold) }
-                IconButton(onClick = { model.lock() }) { Icon(Icons.Outlined.Lock, "App sperren", tint = Mint) }
-            }
             if (model.busy) LinearProgressIndicator(Modifier.fillMaxWidth())
             when (page) {
                 0 -> {
@@ -390,7 +421,7 @@ private fun java.io.InputStream.readBytesLimited(): ByteArray {
                         Text("Lokal verschlüsselt · Ohne Internetberechtigung", color = Mint)
                         Text("${imageCount(d.work)} / $MAX_IMAGES Bilder · ${model.storageBytes() / (1024 * 1024)} MiB belegt")
                         Hint("Bilder separat verschlüsselt, bis 512 KiB pro Bild. Textdaten bis 32 MiB. Sicherungen enthalten alle Bilder.")
-                        Text("Beim Verlassen wird die App gesperrt. Screenshots sind blockiert. Ein verlorenes Passwort lässt sich nicht zurücksetzen.", modifier = Modifier.padding(top = 12.dp)) }
+                        Text("Beim normalen Verlassen wird die App gesperrt. Bei Dateiauswahl und Kollegenaustausch sind App-Wechsel bis zu 2 Minuten möglich. Bildschirm aus oder manuelles Sperren sperrt sofort. Screenshots sind blockiert. Ein verlorenes Passwort lässt sich nicht zurücksetzen.", modifier = Modifier.padding(top = 12.dp)) }
                     val activity = androidx.compose.ui.platform.LocalContext.current as MainActivity
                     OutlinedButton(onClick = activity::toggleBiometric, enabled = !model.busy, modifier = Modifier.fillMaxWidth()) { Text("Biometrie aktivieren / deaktivieren") }
                     Button(onClick = onExport, enabled = !model.busy, modifier = Modifier.fillMaxWidth()) { Text("Verschlüsselte Sicherung speichern") }

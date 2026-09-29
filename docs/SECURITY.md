@@ -1,59 +1,45 @@
-# Lokaler Schutz
+# Lokaler Schutz — 0.4.0
 
-## Umsetzung
+## Daten und Schlüssel
 
-- App-private Datei `werklog.vault`; atomarer Austausch über Android AtomicFile.
-- AES-256-GCM mit zufälliger 96-Bit-IV bei jedem Speichern und 128-Bit-Authentifizierungstag.
-- PBKDF2-HMAC-SHA256 mit 310.000 Iterationen und zufälligem 128-Bit-Salt.
-- Versionierter Header WRKLOG01 ist zusätzliche authentifizierte Information.
-- Passwort wird nicht gespeichert. Abgeleiteter Schlüssel liegt nur während der entsperrten Sitzung im RAM; sein Bytearray wird beim Sperren überschrieben.
-- Sperre in Activity.onStop; keine Speicherung sensibler Compose-Formularzustände in SavedState.
-- FLAG_SECURE blockiert Screenshots und Vorschauen auf unterstützten Android-Geräten.
-- Kein INTERNET-Permission, keine externen Laufzeitdienste oder Analytics.
-- Android-Cloudbackup deaktiviert; Dateien für Cloudbackup und Gerätetransfer ausgeschlossen.
-- Exportiert wird ausschließlich die verschlüsselte Datei. Wiederherstellung prüft Passwort, Authentifizierung und Datenstruktur, bevor sie bestehende Daten atomar ersetzt.
-- Importgröße maximal 8 MiB. Ein fehlgeschlagener Import soll bestehende Daten unverändert lassen.
+App-private, generationenbasierte Ablage: verschlüsselte Metadaten und einzelne verschlüsselte Bilddateien. AES-256-GCM, zufällige 96-Bit-Nonce pro Schreibvorgang, 128-Bit-Tag. PBKDF2-HMAC-SHA256 mit 310000 Iterationen und zufälligem 128-Bit-Salt. Details/AAD und Größenlimits: FORMAT.md.
 
-## Bewusste Grenzen
+Das Passwort wird nicht gespeichert. Der abgeleitete Tresorschlüssel liegt in der entsperrten Sitzung im RAM und wird beim Sperren überschrieben. Bei optionaler Biometrie wird eine verschlüsselte Kopie dieses Schlüssels gespeichert; der umhüllende Android-Keystore-Schlüssel verlangt starke biometrische Authentifizierung bei jeder Verwendung (CryptoObject). Kein bloßes Ja/Nein-Fingerabdruck-Gate. Neue biometrische Einschreibung invalidiert den Keystore-Schlüssel; das Tresorpasswort bleibt erforderlich/nutzbar. Nach Passwortwechsel Biometrie neu aktivieren.
 
-Ein lokales Passwort ist keine Wiederherstellungsfunktion. Verlust von Gerät ohne Backup oder Passwortverlust bedeutet Datenverlust. Ein starkes, einzigartiges Passwort verwenden; kopierte Sicherungen erlauben Offline-Passwortversuche. In-App-Fehlversuchslimits würden das nicht verhindern.
+Metadaten höchstens 32 MiB. Bilder maximal 500 × 512 KiB, maximal 1920 Pixel nach Verarbeitung. Neue Bilder zuerst verschlüsselt schreiben, Metadaten anschließend atomar ersetzen. Verwaiste Bilder erst danach löschen. Passwortwechsel und Wiederherstellung bauen eine neue Generation auf und schalten den aktiven Zeiger erst nach vollständiger Prüfung um. Alte Sicherungen behalten das alte Passwort. Ein starker, einzigartiger Passwortsatz schützt gegen Offline-Versuche auf kopierten Sicherungen; keine Wiederherstellung eines verlorenen Passworts.
 
-Während der Nutzung existieren entschlüsselte Daten im Arbeitsspeicher. Die JVM garantiert nicht, dass jede String-Kopie sofort gelöscht wird. Root, kompromittiertes Betriebssystem, manipulierter App-Code oder eine kompromittierte Tastatur liegen außerhalb des Schutzmodells. Keine Behauptung einer Sicherheitszertifizierung.
+## Sitzung und App-Wechsel
 
-Der Android-Dateidialog kann lokale und Cloud-Ziele anzeigen. Nur der Nutzer entscheidet, wohin eine Sicherung geschrieben wird. E-Mail-Übergaben enthalten ausdrücklich unverschlüsselten Text und werden vorher angezeigt. Die App versendet selbst nichts. E-Mail-Entwürfe verbleiben gegebenenfalls in der externen Mail-App.
+Normalerweise Sperre in `onStop`. Während bewusster Dateiauswahl, Fotoaufnahme und Kollegenaustausch darf ein Hintergrundwechsel höchstens zwei Minuten dauern. Eine verzögerte Sperre und eine Fristprüfung bei Rückkehr decken auch verzögerte Timer ab. Datei-/Code-Eingabe bleibt in dieser kurzen Phase bedienbar. Bildschirm-aus-Ereignis, gesperrtes Gerät oder manueller Schlossknopf sperren sofort. Kein dauerhaftes Entsperren, keine Speicherung sensibler Formularzustände in SavedState. Ein Prozessneustart startet gesperrt. Beim normalen Start/Entsperren Heute öffnen.
 
-Vor Nutzung realer betrieblicher Daten klären, ob das Endgerät und dieser Dokumentationsweg intern freigegeben sind. Das Repository darf ausschließlich Code und synthetische Testdaten enthalten. Die App ersetzt keine offiziellen Störungsmeldungen, Prüfprotokolle oder Betriebsanweisungen.
+FLAG_SECURE schützt Screenshots/Übersicht auf unterstützten Geräten. Während der Nutzung existieren entschlüsselte Daten im RAM; JVM-Strings lassen sich nicht zuverlässig vollständig überschreiben. Root, kompromittiertes Betriebssystem/App-Code/Tastatur liegen außerhalb des Schutzmodells. Keine Sicherheitszertifizierung behauptet.
+
+## Netzwerk und externe Apps
+
+Keine INTERNET-/ACCESS_NETWORK_STATE-Berechtigungen; Manifest und verpackte APK werden geprüft. Das gebündelte ML-Kit-OCR-Modell läuft offline. Kein dynamischer Modelldownload, keine Cloud-OCR. Android-Cloudbackup und automatischer Gerätetransfer ausgeschlossen. Die App verwaltet kein Konto und sendet selbst keine E-Mails.
+
+Android-Dateiauswahl, Galerie, Kamera, Mail-App und Systemkalender sind externe Anwendungen. Ein dort gewähltes Cloud-Ziel/Kalenderkonto kann Daten übertragen; WerkLog selbst synchronisiert nicht. Kalenderübergabe erfolgt nur nach bewusstem Tippen. App-Sperre sperrt keine bereits an externe Apps übergebenen Inhalte.
+
+## Bilder und E-Mail
+
+Zählerfotos werden nach Einlesen für OCR gelöscht, weder Foto noch vollständiger OCR-Text kommen ins Archiv. Werte müssen bestätigt werden. Kamera erzeugt vorübergehend eine Datei im engen Kamera-Cacheordner. Galerieimport kopiert maximal 64 MiB; das Original bleibt unverändert. Abbruch/Verarbeitung löscht Arbeitskopien, übrig gebliebene Kamera-Dateien werden beim Activity-Neustart entfernt. Prozessabbruch/Rotation kann deshalb eine neue Aufnahme nötig machen. Verhalten der externen Kamera ist gesondert auf dem Gerät zu testen.
+
+Gespeicherte Anleitungs-/Bestellbilder werden neu als JPEG komprimiert (EXIF entfällt), separat verschlüsselt und erst bei „Bild anzeigen“ geladen. Bestell-Mailentwürfe enthalten nach Vorschau unverschlüsselten Text und bewusst beigefügte Bilder. Keine Anlagen-IDs oder Zugangsdaten automatisch im Mailtext. Ein nicht exportierter ContentProvider gewährt URI-Leserechte für Bildanhänge aus dem RAM (bis 15 Minuten). Keine Klartext-Mailbilder im Dateicache. Prozessende/Fristablauf kann erneute Übergabe erfordern. Die Mail-App kann übergebene Inhalte dauerhaft speichern.
+
+## Sicherung und Kollegenaustausch
+
+ZIP-Dateien enthalten ausschließlich bereits verschlüsselte Metadaten/Bilder; Anzahl und Dateigrößen bleiben sichtbar. Stream-Verarbeitung, max. 384 MiB Container, enge Namen-/Anzahl-/Größenlimits, keine Verzeichnisse/Pfade. Alle benötigten Bild-Tags werden vor Aktivierung des Imports geprüft. Alte einzelne WRKLOG01-Backups bleiben lesbar. Neue Archive benötigen 0.4+.
+
+WRKSHR02-Anlagenfreigaben verwenden einen eigenen zufälligen 20-Zeichen-Code (rund 99 Bit), eigenen Salt und eigene Bildverschlüsselung. Kein App-Passwort in der Freigabe. Code nur auf dem Bildschirm, nicht in Datei/Dateiname/Message/Logs/Einstellungen. Datei und Code getrennt übergeben. Jede Person mit Datei und Code kann mit kompatibler Software entschlüsseln; keine App-exklusive Garantie, kein Widerruf exportierter Dateien, kein Beweis der Absenderidentität. WRKSHR01 lesbar.
+
+Standardumfang Stammdaten, Wissen und Anleitungen; Passwörter/Historie nur ausdrücklich. Einzelner Wissenseintrag enthält nur Basis-Anlagenzuordnung. Empfänger sieht Inhalt vor Import, Passwörter maskiert. Neue lokale Anlagenkopie oder ausgewählte bestehende Anlage; vorhandene Inhalte standardmäßig erhalten, explizite Ersetzungswahl nötig. Herkunfts-IDs verhindern Wiederholungsduplikate. Keine automatische Löschung entfernter Senderdaten.
+
+FileProvider gibt ausschließlich eng begrenzte Freigabe-/Kameraordner frei. Verschlüsselte Freigaben älter als 24 Stunden werden beim App-Start gelöscht. QR-Code-Bilder im Freigabeordner enthalten nur bewusst geteilte Anlagen-ID/Kennzeichen. Kopien externer Apps bleiben unberührt.
+
+## Erinnerungen
+
+Außerhalb des Tresors liegen nur geplante Auslösezeitpunkte; Benachrichtigungen enthalten keine Titel/Firmen/Anlagen. Berechtigung ab Android 13 erforderlich. Inexact Alarms können sich verzögern, sind keine sicherheitskritische Alarmierung. Nach Geräteneustart werden gespeicherte Zeitpunkte neu geplant; nach Öffnen werden Serientermine für das nächste Jahr aktualisiert. Systemkalenderkopien werden nicht automatisch nachgeführt.
 
 ## Vor produktiver Nutzung
 
-Erfolgreicher CI-Build, Sicherheits-/Lifecycle-Gerätetests, persistente Release-Signatur und interne Nutzungsfreigabe. Die implementierten Schutzmechanismen wurden hier nicht auf einem Android-Gerät verifiziert.
-
-## Anlagenzugänge ab 0.2.0
-
-Zugangseinträge werden zusammen mit allen Daten per AES-GCM verschlüsselt, nie als separate Klartextdatei. Mehrere Zugänge werden über die Anlagen-ID zugeordnet. Anzeige standardmäßig maskiert, gezieltes Anzeigen maximal 20 Sekunden. Beim Verlassen der App greift weiterhin die Sitzungssperre. Es gibt bewusst keine Zwischenablagefunktion. Ein Passwortvorschlag ist ein noch nicht gespeicherter Formularwert; seine Erzeugung setzt das reale Anlagenpasswort nicht zurück. Die erzeugten Zeichen müssen mit dem jeweiligen Anlagen-System kompatibel sein.
-
-Die E-Mail-Funktion erhält nur Vorgänge und Anlagennamen. Zugangseinträge, Wissenseinträge und Servicekontakte werden nicht automatisch übernommen. Geheimnisse deshalb nicht in allgemeine Vorgangsnotizen kopieren. Diese Notizen werden bei Übergaben bewusst geteilt.
-
-Schema 2 liest alte Schema-1-Sicherungen. Version 0.1.0 kann neue Sicherungen nicht lesen. Vor einer Neuinstallation verschlüsselt sichern; die bisherigen CI-Debug-Signaturen sind nicht dauerhaft identisch. Neuinstallation löscht den lokalen Tresor, Wiederherstellung braucht Sicherung und deren Passwort.
-
-## Verschlüsselter Kollegenaustausch
-
-`.werkshare` enthält ausschließlich einen getrennten WRKSHR01-Header, zufälligen Salt und IV sowie AES-256-GCM-verschlüsselten Inhalt. PBKDF2-HMAC-SHA256 (310.000 Iterationen) leitet den Dateischlüssel aus einem zufälligen 20-Zeichen-Code ab (rund 99 Bit Entropie). Pro Freigabe neuer Code, Salt und IV. Header authentifiziert, manipulierte Inhalte werden abgewiesen. Vollsicherungen WRKLOG01 und Austauschdateien sind getrennte Formate.
-
-Das Gerätepasswort wird nie weitergegeben. Der Code wird nur während der Erstellung angezeigt, nicht in Datei, Dateiname, Nachricht, Logs oder dauerhaften Einstellungen gespeichert. Datei und Code getrennt übergeben. Keine App-exklusive Entschlüsselungsgarantie: Jeder mit Datei, Code und kompatibler Software kann entschlüsseln. Das ist beabsichtigt und sicherer als geheime Dateiformate. Kein Widerruf und keine Verfallszeit für exportierte Dateien. Der Code ist kein Nachweis einer bestimmten Absenderidentität.
-
-Standardmäßig werden Stammdaten und Wissen geteilt. Zugangsdaten und Vorgangshistorie müssen ausdrücklich eingeschlossen werden. Beim Teilen eines einzelnen Wissenseintrags werden nur dieser und Anlagenname/Gewerk als Zuordnung exportiert. Die Vorschau des Empfängers maskiert Passwörter; nach bestätigtem Import sind sie im eigenen verschlüsselten Tresor. Import erzeugt eine neue Anlagenkopie mit neuen IDs, niemals automatisches Überschreiben.
-
-Android FileProvider gewährt nur Leserechte für einen Unterordner mit bereits verschlüsselten Austauschdateien. Temporäre Freigaben älter als 24 Stunden werden beim nächsten App-Start entfernt. Kopien in Mail- oder Datei-Apps bleiben davon unberührt. Keine INTERNET-Berechtigung. Ausgewählte Dateianbieter oder die gewählte Versand-App können Daten entsprechend ihrer eigenen Funktionen übertragen.
-
-## Arbeitsmodule und Bildschutz ab 0.3.0
-
-Das gebündelte lateinische ML-Kit-Texterkennungsmodell läuft auf dem Gerät. INTERNET und ACCESS_NETWORK_STATE werden aus dem zusammengeführten Manifest entfernt; die CI prüft die fertig verpackte APK zusätzlich. Kein dynamisches Modell und keine Cloud-OCR. Herstellerdokumentation: https://developers.google.com/ml-kit/vision/text-recognition/v2/android
-
-Für Anleitungen und Bestellungen kann auch ein bestehendes Bild über den Android-Dateidialog gewählt werden (maximal 64 MiB Eingabedatei). Das Original bleibt beim gewählten Anbieter; nur die temporäre Arbeitskopie wird nach der Verarbeitung gelöscht. Die externe Kamera schreibt vorübergehend eine Aufnahme in einen eng begrenzten app-privaten Cache-Unterordner. Rückkehr sperrt WerkLog; nach Entsperren wird das Foto verarbeitet. Zählerfotos werden nach dem Einlesen für OCR gelöscht; keine Aufnahme und kein gesamter OCR-Text wird im Datenmodell gespeichert. Abbruch löscht die temporäre Datei; übrig gebliebene Kameradateien werden beim nächsten Activity-Neustart gelöscht. Bei Prozessabbruch/Rotation kann deshalb eine Wiederholung nötig sein. Die externe Kamera-App und ihre eigene Verarbeitung liegen außerhalb von WerkLog. Ein Gerätetest mit der verwendeten Kamera ist erforderlich.
-
-Anleitungs-/Bestellbilder werden auf maximal 1280 Pixel Kantenlänge und 160 KiB JPEG verkleinert, bei Bedarf weiter reduziert. Neukompression verwirft EXIF-Metadaten. Höchstens 30 Bilder insgesamt, weiterhin 8 MiB verschlüsselter Tresor. Diese Bilder werden Base64-kodiert innerhalb des verschlüsselten Tresors und verschlüsselter Backups gespeichert. Entfernen im UI löscht die aktuelle Referenz; ältere Sicherungen bleiben unverändert. Importierte Bilder werden mit begrenzter Dekodiergröße dargestellt. Vor jedem Speichern werden Struktur, Verweise und Limits erneut geprüft, bevor die Datei atomar ersetzt wird.
-
-Bestell-Mailentwürfe sind eine bewusste unverschlüsselte Freigabe. Nach Vorschau übergibt WerkLog nur Bestelltext und ausgewählte Positionsbilder; lokale Anlagen-IDs oder Anlagenakten werden nicht angehängt. Bilder stehen über einen nicht exportierten ContentProvider mit expliziten URI-Leserechten bis zu 15 Minuten im RAM bereit. Es werden keine unverschlüsselten Mail-Bilddateien in den Cache geschrieben. Bei Prozessende oder Fristablauf muss ein noch nicht eingelesener Anhang neu übergeben werden. Die externe Mail-App kann Text und Bilder danach selbst dauerhaft speichern. Kein automatischer Versand.
-
-Kalender und Anleitungen sind persönliche Dokumentation. Keine Kalenderkonten, Einladungen, Systemkalenderrechte oder Hintergrundbenachrichtigungen. Keine Echtheits- oder Freigabeprüfung von selbst geschriebenen/importierten Anleitungen.
+Dauerhafte Release-Signatur (RELEASE-SIGNING.md), erfolgreiche aktuelle CI und S24-Geräteprüfung. Kamera-/OCR-Qualität, Biometrie, Mail-App und Energiesparverhalten brauchen reale Abnahme. Keine echten Betriebsdaten im öffentlichen Repository. Interne Freigaben und offizielle Melde-/Prüfwege bleiben maßgeblich; die App dokumentiert, steuert keine Anlagen und setzt keine betrieblichen Grenzwerte voraus.

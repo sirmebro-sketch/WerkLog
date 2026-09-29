@@ -20,6 +20,7 @@ class CompanionTest {
         val first = mergePackage(current, incoming, "local", false)
         val second = mergePackage(first, incoming, "local", false)
         assertEquals(first, second); assertEquals(1, second.infos.size)
+        assertEquals(ImportChanges(0, 0, 1), importChanges(first, incoming, "local"))
         val edited = first.copy(infos = first.infos.map { it.copy(body = "Lokal") })
         assertEquals("Lokal", mergePackage(edited, incoming, "local", false).infos.single().body)
         assertEquals("Neu", mergePackage(edited, incoming, "local", true).infos.single().body)

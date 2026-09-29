@@ -62,4 +62,20 @@ class RepositoryTest {
             assertFalse(File(root, "escape").exists())
         } finally { root.deleteRecursively() }
     }
+    @Test fun largeColleagueArchiveKeepsImagesAndSeparateCode() = kotlinx.coroutines.runBlocking<Unit> {
+        val root = Files.createTempDirectory("share-test").toFile()
+        try {
+            val repo = LocalRepository(File(root, "original")); val salt = Vault.salt(); val key = Vault.key(password, salt)
+            val a = Asset(name = "Testanlage", trade = "Wasser", location = "", note = "")
+            val raw = data(250); val d = repo.save(raw.copy(assets = listOf(a), work = raw.work.copy(guides = raw.work.guides.map { it.copy(assetId = a.id) })), key, salt)
+            val code = Exchange.newCode(); val output = File(root, "anlage.werkshare")
+            ShareArchive.create(d, code, { repo.image(it, key) }, output, root)
+            ShareArchive.open(output, code.lowercase(), root).use { opened ->
+                assertEquals(250, imageCount(opened.data.work))
+                imageValues(opened.data).forEach { assertArrayEquals(jpeg, opened.image(it)) }
+            }
+            assertThrows(Exception::class.java) { ShareArchive.open(output, Exchange.newCode(), root) }
+        } finally { root.deleteRecursively() }
+    }
+
 }

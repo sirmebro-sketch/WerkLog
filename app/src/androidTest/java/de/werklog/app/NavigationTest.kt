@@ -45,7 +45,8 @@ class NavigationTest {
             ui.onNodeWithText("Speichern").performClick()
             ui.waitUntil(15000) { ui.onAllNodesWithText("Verstanden").fetchSemanticsNodes().isNotEmpty() }
             ui.onNodeWithText("Verstanden").performClick()
-            ui.onNodeWithContentDescription("App sperren").performClick()
+            ui.onNodeWithContentDescription("App sperren").assertIsDisplayed().performClick()
+            ui.waitUntil(10000) { ui.onAllNodesWithText("Passwort", substring = false).fetchSemanticsNodes().isNotEmpty() }
             ui.onNodeWithText("Passwort", substring = false).performTextInput("NeuesPasswort2026")
             ui.onNodeWithText("Entsperren", substring = false).performClick()
             ui.waitUntil(15000) { ui.onAllNodesWithText("Alles im Blick.").fetchSemanticsNodes().isNotEmpty() }

@@ -65,3 +65,22 @@ Nicht mit echten sensiblen Betriebsdaten testen, solange Schutz und Freigaben of
 - [ ] Bestellanhang nach 15 Minuten/Prozessende ggf. erneut erstellen; keine Klartextbilder im lokalen Dateiverzeichnis.
 - [ ] Schema-1-/Schema-2-Backups importieren; Schema-3-Backup mit allen neuen Modulen wiederherstellen.
 - [ ] Anlagenfreigabe mit bebilderter Anleitung/Zählermessungen auf zweiter 0.3.0-Installation importieren.
+
+## Abnahme 0.4.0
+
+Automatisierte Repository-Tests decken 500 Bilder, >8-MiB-Backup, falsches Passwort, fehlende/manipulierte Bilder, Pfadmanipulation, Migration, Passwortrotation, große Freigaben und Android/Apple-Testvektoren ab. Ergebnisse des finalen CI-Laufs gesondert prüfen.
+
+- [ ] Drei Hauptpunkte; Betrieb auffälliger und mittig, Kacheln mit Symbol; 150 % Schrift.
+- [ ] Start/Entsperren auf Heute; Datum/Wochentag und wiederkehrende anstehende Termine korrekt.
+- [ ] Einführung folgt den Seiten, überspringbar und erneut aufrufbar.
+- [ ] Eigene 200+ Fotos erfassen, Neustart, Backup auf anderes Gerät und Wiederherstellung.
+- [ ] Passwortwechsel mit 200+ Bildern; falsches altes Passwort ändert nichts; altes/neues Backup brauchen jeweils richtiges Passwort.
+- [ ] Biometrie aktivieren, abbrechen, entsperren, neu eingeschriebenen Finger prüfen; Passwortfallback.
+- [ ] Datei auswählen, Code aus anderer App holen: kein unnötiger Sperrbildschirm innerhalb zwei Minuten.
+- [ ] Während Austausch Bildschirm aus: sofort sperren. Nach >2 Minuten Hintergrund ebenfalls sperren.
+- [ ] Beim gewöhnlichen App-Wechsel weiterhin sofort sperren. Manueller Schlossknopf ebenso.
+- [ ] Löschen von Anlage zeigt Folgen; verknüpfte Termine/Bestellungen/Anleitungen bleiben ohne Zuordnung.
+- [ ] Rundgangsvorlage bearbeiten/löschen verändert vorhandenes Protokoll nicht.
+- [ ] QR erzeugen, drucken und lesen; doppeltes Kennzeichen nicht automatisch zuordnen.
+- [ ] Wiederholungen am Monatsende, Benachrichtigungen mit gesperrtem Tresor und nach Neustart.
+- [ ] Empfänger-Mail-App liest alle bewusst freigegebenen Bilder; kein automatischer Versand.

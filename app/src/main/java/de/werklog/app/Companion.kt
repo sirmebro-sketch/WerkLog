@@ -62,3 +62,33 @@ fun removeAsset(d: Data, id: String): Data = d.copy(
         appointments = d.work.appointments.map { if (it.assetId == id) it.copy(assetId = "") else it },
         guides = d.work.guides.map { if (it.assetId == id) it.copy(assetId = "") else it },
         orders = d.work.orders.map { o -> o.copy(items = o.items.map { if (it.assetId == id) it.copy(assetId = "") else it }) }))
+
+data class ImportChanges(val fresh: Int, val changed: Int, val unchanged: Int)
+/** Compare localized incoming identities. Call with image fingerprints for content comparison. */
+fun importChanges(current: Data, incoming: Data, target: String): ImportChanges {
+    val merged = mergePackage(current, incoming, target, true)
+    var fresh = 0; var changed = 0; var unchanged = 0
+    fun <T> compare(old: List<T>, source: List<T>, next: List<T>, kind: String, id: (T) -> String) {
+        val oldMap = old.associateBy(id); val nextMap = next.associateBy(id)
+        source.forEach { item ->
+            val key = if (id(item) in oldMap) id(item) else importId(target, kind, id(item))
+            val before = oldMap[key]; val after = nextMap.getValue(key)
+            if (before == null) fresh++ else if (before == after) unchanged++ else changed++
+        }
+    }
+    compare(current.infos.filter { it.assetId == target }, incoming.infos, merged.infos, "info", { it.id })
+    compare(current.credentials.filter { it.assetId == target }, incoming.credentials, merged.credentials, "credential", { it.id })
+    compare(current.entries.filter { it.assetId == target }, incoming.entries, merged.entries, "entry", { it.id })
+    compare(current.readings.filter { it.assetId == target }, incoming.readings, merged.readings, "reading", { it.id })
+    compare(current.work.meters.filter { it.assetId == target }, incoming.work.meters, merged.work.meters, "meter", { it.id })
+    compare(current.work.guides.filter { it.assetId == target }, incoming.work.guides, merged.work.guides, "guide", { it.id })
+    return ImportChanges(fresh, changed, unchanged)
+}
+suspend fun fingerprintImages(data: Data, load: suspend (String) -> ByteArray): Data {
+    val hashes = mutableMapOf<String, String>()
+    for (image in imageValues(data).filter { it.isNotEmpty() }.distinct()) {
+        val bytes = load(image)
+        try { hashes[image] = "sha256:" + java.util.Base64.getEncoder().encodeToString(java.security.MessageDigest.getInstance("SHA-256").digest(bytes)) } finally { bytes.fill(0) }
+    }
+    return mapImages(data) { hashes[it] ?: it }
+}

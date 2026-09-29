@@ -32,12 +32,8 @@ Keine vorgegebenen Sollwerte, Alarmgrenzen oder sicherheitsrelevanten Handlungse
 
 Offline-Zählerfoto-Erkennung mit verpflichtender manueller Bestätigung und ohne Fotoarchiv. Lokaler Kraftwerkkalender mit Fremdfirma, Arbeit und Zuständigem. Allgemeine/anlagenbezogene Anleitungen mit sortierten Schritten und komprimierten Fotos. Bestelllisten mit mehreren Positionen, lokalen Anlagenzuordnungen, Bildanhängen und manueller E-Mail-Übergabe. Mehrere Bilder werden intern verschlüsselt gespeichert, maximal 160 KiB pro Bild und 30 Bilder insgesamt. Vor dem atomaren Speichern validiert die App das neue Datenmodell.
 
-## Nächste gezielte Ausbaustufen (noch nicht implementiert)
+## In 0.4.0 ergänzt
 
-1. Eigene dauerhafte Release-Signierung und Android-Geräteabnahme, besonders Kamera, OCR, Dateiaustausch und Mail-Anhänge.
-2. Messpunktvorlagen, Zählerwechsel-Logik und Verlaufsgrafik.
-3. QR-Einstieg in eine Anlage, Favoriten und Standortstruktur.
-4. Wiederkehrende Wartungsplanung und optionale lokale Benachrichtigungen.
-5. Strukturierter Bereitschaftseinsatz: Anruf, Abfahrt, Ankunft, Arbeitsende, Rückkehr; ohne tarifliche Bewertung.
-6. Freigegebene PDF-Berichte und PDF-Anlagen, weiterhin ohne automatische Zugangsdatenübernahme.
-7. iOS-Portierung mit gemeinsamem Daten-/Kryptoformat, eigener Apple-Plattformintegration und eigenen Tests.
+Dreier-Navigation, Betriebskacheln, Einführung, Passwortwechsel, Biometrie, gezielte Entsperr-Wechselphase, getrennte verschlüsselte Bildablage, 500 Bilder, große Backups/Freigaben, Anlagenkennzeichen/Hierarchie/Favoriten/QR, Suche, Zählerverlauf/-wechsel, Terminserien/Erinnerungen, Vorlagen, Bestellstatus und Folgevorgänge. Aktueller Umsetzungsstand und offene Punkte stehen in ROADMAP.md.
+
+Weitere bisher nicht beauftragte Vertiefungen: strukturierter Bereitschaftseinsatz (Anruf/Abfahrt/Ankunft/Arbeitsende/Rückkehr, ohne tarifliche Bewertung), PDF-Berichte und PDF-Anlagen. Nicht als vorhandene Funktionen ausgeben.

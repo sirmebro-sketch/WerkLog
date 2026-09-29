@@ -14,7 +14,11 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
+val LocalTransferScope = staticCompositionLocalOf<(Boolean) -> Unit> { {} }
+
 @Composable internal fun ExportAssetDialog(data: Data, asset: Asset, info: AssetInfo?, close: () -> Unit, share: (java.io.File) -> Unit) {
+    val transferScope = LocalTransferScope.current
+    DisposableEffect(Unit) { transferScope(true); onDispose { transferScope(false) } }
     var history by remember { mutableStateOf(false) }; var credentials by remember { mutableStateOf(false) }
     var working by remember { mutableStateOf(false) }; var error by remember { mutableStateOf<String?>(null) }
     var code by remember { mutableStateOf<String?>(null) }; var encrypted by remember { mutableStateOf<java.io.File?>(null) }
@@ -58,14 +62,34 @@ import kotlinx.coroutines.withContext
 }
 
 @Composable internal fun ImportAssetDialog(file: java.io.File, current: Data, busy: Boolean, close: () -> Unit, save: (OpenShare, String?, Boolean) -> Unit) {
+    val transferScope = LocalTransferScope.current
+    DisposableEffect(Unit) { transferScope(true); onDispose { transferScope(false) } }
     var code by remember { mutableStateOf("") }; var opened by remember { mutableStateOf<OpenShare?>(null) }
     val incoming = opened?.data
+    val loadLocalImage = LocalImageLoader.current
+    var comparison by remember { mutableStateOf<ImportChanges?>(null) }
+    var comparing by remember { mutableStateOf(false) }
     var target by remember { mutableStateOf("") }; var replace by remember { mutableStateOf(false) }
     var handedOff by remember { mutableStateOf(false) }
     val context = androidx.compose.ui.platform.LocalContext.current
     DisposableEffect(Unit) { onDispose { if (!handedOff) opened?.close() } }
     var error by remember { mutableStateOf<String?>(null) }; var working by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
+    LaunchedEffect(target, opened) {
+        comparison = null
+        if (target.isNotEmpty() && opened != null) {
+            comparing = true
+            try {
+                val source = opened!!
+                comparison = withContext(Dispatchers.IO) {
+                    val local = fingerprintImages(assetPackage(current, target, true, true), loadLocalImage)
+                    val remote = fingerprintImages(source.data) { source.image(it) }
+                    importChanges(local, remote, target)
+                }
+            } catch (_: Exception) { error = "Vergleich nicht möglich. Bilddateien prüfen oder als neue Kopie importieren." }
+            finally { comparing = false }
+        }
+    }
     AlertDialog(onDismissRequest = { if (!working) close() }, title = { Text("Anlagenfreigabe importieren") },
         text = { Column(Modifier.heightIn(max = 480.dp).verticalScroll(rememberScrollState())) {
             val preview = incoming
@@ -80,6 +104,8 @@ import kotlinx.coroutines.withContext
                 Text("${preview.infos.size} Wissenseinträge · ${preview.entries.size} Vorgänge · ${preview.readings.size} Messwerte · ${preview.credentials.size} Zugänge · ${preview.work.guides.size} Anleitungen")
                 Picker("Importziel", listOf("" to "Neue Anlagenkopie") + current.assets.map { it.id to it.name }, target) { target = it; replace = false }
                 if (target.isNotEmpty()) {
+                    if (comparing) LinearProgressIndicator(Modifier.fillMaxWidth())
+                    comparison?.let { Text("${it.fresh} neu · ${it.changed} geändert · ${it.unchanged} unverändert", color = Mint) }
                     Hint("Vorhandene Anlagen-Stammdaten bleiben lokal. Neue Inhalte werden ergänzt. Wiederholte Importe derselben IDs erzeugen keine Duplikate.")
                     Row { Checkbox(replace, { replace = it }); Text("Auch bereits zugeordnete Inhalte durch diese Version ersetzen") }
                     if (replace) Text("Ersetzt auch lokal bearbeitete Inhalte mit gleicher Herkunft. Es werden keine fehlenden Inhalte gelöscht.", color = Amber)
@@ -96,7 +122,7 @@ import kotlinx.coroutines.withContext
             }
             error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
         } },
-        confirmButton = { TextButton(enabled = !busy && !working && (incoming != null || code.isNotBlank()), onClick = {
+        confirmButton = { TextButton(enabled = !busy && !working && !comparing && (target.isEmpty() || comparison != null) && (incoming != null || code.isNotBlank()), onClick = {
             val ready = incoming
             if (ready != null) { handedOff = true; save(opened!!, target.takeIf { it.isNotEmpty() }, replace); close() }
             else { working = true; error = null; val submittedCode = code; code = ""
