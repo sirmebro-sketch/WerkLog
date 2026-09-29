@@ -44,7 +44,7 @@ val PowerPlantIcon: ImageVector by lazy {
 @Composable internal fun TourStrip(step: Int, title: String, hint: String, back: () -> Unit, skip: () -> Unit, next: () -> Unit) {
     // Part of Scaffold's bottom bar: reserves space instead of covering or dimming the page.
     val maxHeight = (LocalConfiguration.current.screenHeightDp * .30f).dp
-    Surface(color = WerkColors.surface, tonalElevation = 4.dp) {
+    Surface(color = MaterialTheme.colorScheme.surface, tonalElevation = 4.dp) {
         Column(Modifier.fillMaxWidth().heightIn(max = maxHeight).verticalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 8.dp)) {
             Text("${step + 1}/4 · $title", color = Mint, fontWeight = FontWeight.Bold)
             Text(hint, style = MaterialTheme.typography.bodySmall)
