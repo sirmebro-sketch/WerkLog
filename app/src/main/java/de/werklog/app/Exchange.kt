@@ -48,7 +48,8 @@ object Exchange {
                 val j = JSONObject(String(raw, Charsets.UTF_8))
                 require(j.getString("format") == "WerkLog-Anlagenpaket" && j.getInt("version") == 1)
                 return decode(j.getJSONObject("data").toString().toByteArray(Charsets.UTF_8)).also {
-                    require(it.assets.size == 1 && it.rounds.isEmpty() && it.runs.isEmpty())
+                    require(it.assets.size == 1 && it.rounds.isEmpty() && it.runs.isEmpty() && it.work.orders.isEmpty() && it.work.appointments.isEmpty())
+                    require(it.work.guides.all { g -> g.assetId == it.assets.single().id })
                 }
             } finally { raw.fill(0) }
         } finally { key.fill(0) }
@@ -60,15 +61,21 @@ fun assetPackage(data: Data, id: String, credentials: Boolean, history: Boolean,
         entries = if (history && infoId == null) data.entries.filter { it.assetId == id } else emptyList(),
         readings = if (history && infoId == null) data.readings.filter { it.assetId == id } else emptyList(),
         credentials = if (credentials && infoId == null) data.credentials.filter { it.assetId == id } else emptyList(),
-        infos = data.infos.filter { it.assetId == id && (infoId == null || it.id == infoId) })
+        infos = data.infos.filter { it.assetId == id && (infoId == null || it.id == infoId) },
+        work = if (infoId != null) WorkData() else WorkData(
+            meters = if (history) data.work.meters.filter { it.assetId == id } else emptyList(),
+            guides = data.work.guides.filter { it.assetId == id }))
 }
 /** Import as a new local copy; never replace the receiver's existing asset or records. */
 fun importPackage(current: Data, incoming: Data): Data {
     require(incoming.assets.size == 1)
     val old = incoming.assets.single(); val id = newId()
+    val meterIds = incoming.work.meters.associate { it.id to newId() }
     return current.copy(assets = current.assets + old.copy(id = id, name = "${old.name} (Import)"),
         entries = current.entries + incoming.entries.map { it.copy(id = newId(), assetId = id) },
-        readings = current.readings + incoming.readings.map { it.copy(id = newId(), assetId = id) },
+        readings = current.readings + incoming.readings.map { it.copy(id = newId(), assetId = id, meterId = if (it.meterId.isEmpty()) "" else meterIds.getValue(it.meterId)) },
         credentials = current.credentials + incoming.credentials.map { it.copy(id = newId(), assetId = id) },
-        infos = current.infos + incoming.infos.map { it.copy(id = newId(), assetId = id) })
+        infos = current.infos + incoming.infos.map { it.copy(id = newId(), assetId = id) },
+        work = current.work.copy(meters = current.work.meters + incoming.work.meters.map { it.copy(id = meterIds.getValue(it.id), assetId = id) },
+            guides = current.work.guides + incoming.work.guides.map { it.copy(id = newId(), assetId = id, steps = it.steps.map { s -> s.copy(id = newId()) }) }))
 }

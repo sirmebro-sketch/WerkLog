@@ -25,7 +25,7 @@ import kotlinx.coroutines.withContext
         text = { Column(Modifier.heightIn(max = 480.dp).verticalScroll(rememberScrollState())) {
             if (code == null) {
                 Text(asset.name, fontWeight = FontWeight.Bold)
-                Text(if (info == null) "Stammdaten und ${selection.infos.size} Wissenseinträge" else "Nur Wissenseintrag: ${info.title}")
+                Text(if (info == null) "Stammdaten, ${selection.infos.size} Wissenseinträge und ${selection.work.guides.size} Anleitungen (mit Bildern)" else "Nur Wissenseintrag: ${info.title}")
                 if (info == null) {
                     Row { Checkbox(history, { history = it }, enabled = !working); Text("Störungen und Messwerte einschließen", modifier = Modifier.padding(top = 12.dp).weight(1f)) }
                     Row { Checkbox(credentials, { credentials = it }, enabled = !working); Text("Zugangsdaten ausdrücklich einschließen", modifier = Modifier.padding(top = 12.dp).weight(1f)) }
@@ -69,7 +69,7 @@ import kotlinx.coroutines.withContext
                 val a = preview.assets.single()
                 Text(a.name, fontSize = 23.sp, fontWeight = FontWeight.Bold)
                 Text("${a.trade} · ${a.location}")
-                Text("${preview.infos.size} Wissenseinträge · ${preview.entries.size} Vorgänge · ${preview.readings.size} Messwerte · ${preview.credentials.size} Zugänge")
+                Text("${preview.infos.size} Wissenseinträge · ${preview.entries.size} Vorgänge · ${preview.readings.size} Messwerte · ${preview.credentials.size} Zugänge · ${preview.work.guides.size} Anleitungen")
                 Hint("Importiert als neue Anlagenkopie. Bestehende Daten werden nicht überschrieben. Herkunft und Richtigkeit des Inhalts bitte selbst prüfen.")
                 listOf("Hersteller" to a.manufacturer, "Typ" to a.model, "Seriennummer" to a.serial,
                     "Servicekontakt" to a.contact, "Ersatzteile" to a.spareParts, "Wartung" to a.nextService, "Hinweise" to a.note).forEach { (label, value) ->
@@ -78,6 +78,7 @@ import kotlinx.coroutines.withContext
                 preview.infos.forEach { Text(it.title, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 12.dp)); Text(it.body) }
                 preview.entries.forEach { Text("${it.status} · ${it.title}", fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 12.dp)); Text(it.note) }
                 preview.readings.forEach { Text("${it.label}: ${it.value} ${it.unit} · ${stamp(it.created)}", modifier = Modifier.padding(top = 8.dp)) }
+                preview.work.guides.forEach { g -> Text("Anleitung: ${g.title}", fontWeight = FontWeight.Bold); g.steps.forEachIndexed { index, s -> Text("${index + 1}. ${s.title}"); Text(s.body); StoredPhoto(s.image) } }
                 preview.credentials.forEach { Text("Zugang: ${it.title} (Passwort verborgen)", color = Amber, modifier = Modifier.padding(top = 8.dp)) }
             }
             error?.let { Text(it, color = MaterialTheme.colorScheme.error) }

@@ -47,6 +47,13 @@ private val WerkColors = darkColorScheme(primary = Mint, onPrimary = Color(0xFF0
 
 class MainActivity : ComponentActivity() {
     private val model: WorkModel by viewModels()
+    private var photoFile: File? = null
+    private var photoTarget: PhotoTarget? = null
+    private var readyPhoto by mutableStateOf<Pair<File, PhotoTarget>?>(null)
+    private val camera = registerForActivityResult(ActivityResultContracts.TakePicture()) { success ->
+        val file = photoFile; val target = photoTarget; photoFile = null; photoTarget = null
+        if (success && file != null && target != null) readyPhoto = file to target else file?.delete()
+    }
     private var pendingBackup: ByteArray? = null
     private var importBytes by mutableStateOf<ByteArray?>(null)
     private val importAsset = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri -> if (uri != null) readShare(uri) }
@@ -68,6 +75,7 @@ class MainActivity : ComponentActivity() {
         window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
         enableEdgeToEdge()
         receiveShare(intent)
+        File(cacheDir, "camera").listFiles()?.forEach { it.delete() }
         File(cacheDir, "shares").listFiles()?.filter { System.currentTimeMillis() - it.lastModified() > 86_400_000 }?.forEach { it.delete() }
         setContent { MaterialTheme(colorScheme = WerkColors) {
             Surface(Modifier.fillMaxSize(), color = WerkColors.background) {
@@ -76,7 +84,13 @@ class MainActivity : ComponentActivity() {
                     else Workspace(model, onExport = {
                         runCatching { pendingBackup = model.backup(); export.launch("WerkLog-${java.time.LocalDate.now()}.werklog") }
                             .onFailure { model.error = "Sicherung konnte nicht geöffnet werden." }
-                    }, onShare = ::share, onShareFile = ::shareFile, onImport = { importAsset.launch(arrayOf("*/*")) })
+                    }, onShare = ::share, onShareFile = ::shareFile, onImport = { importAsset.launch(arrayOf("*/*")) }, onPhoto = ::takePhoto, onOrder = ::sendOrder)
+                    if (model.data != null && readyPhoto != null) {
+                        val pending = readyPhoto!!
+                        PhotoReview(pending.first, pending.second, model.data!!, model.busy, { pending.first.delete(); readyPhoto = null }) { next ->
+                            try { model.update(next) } catch (_: Exception) { model.error = "Bild konnte nicht gespeichert werden. Größenbegrenzung prüfen." }
+                        }
+                    }
                     if (model.data != null && importBytes != null) ImportAssetDialog(importBytes!!, model.busy, { importBytes = null }) { incoming ->
                         model.data?.let { model.update(importPackage(it, incoming)) }
                     }
@@ -103,6 +117,28 @@ class MainActivity : ComponentActivity() {
                 Exchange.checkEnvelope(bytes); importBytes = bytes
             } catch (_: Exception) { model.error = "Keine gültige Anlagenfreigabe oder Datei größer als 8 MB." }
         }
+    }
+    private fun takePhoto(target: PhotoTarget) {
+        try {
+            val folder = File(cacheDir, "camera").also { it.mkdirs() }
+            val file = File(folder, "capture-${newId()}.jpg")
+            photoFile = file; photoTarget = target
+            camera.launch(FileProvider.getUriForFile(this, "$packageName.files", file))
+        } catch (_: Exception) { photoFile?.delete(); photoFile = null; photoTarget = null; model.error = "Keine Kamera verfügbar. Einträge können weiterhin manuell erfasst werden." }
+    }
+    private fun sendOrder(order: PartsOrder) {
+        try {
+            val uris = ArrayList<Uri>()
+            order.items.forEachIndexed { index, item -> if (item.image.isNotEmpty()) uris.add(OrderAttachmentProvider.register("$packageName.order-files", "Position-${index + 1}.jpg", java.util.Base64.getDecoder().decode(item.image))) }
+            val intent = if (uris.isEmpty()) Intent(Intent.ACTION_SENDTO, Uri.parse("mailto:")) else Intent(Intent.ACTION_SEND_MULTIPLE).setType("image/jpeg").putParcelableArrayListExtra(Intent.EXTRA_STREAM, uris)
+            intent.putExtra(Intent.EXTRA_SUBJECT, "Bestellanfrage · ${order.title}").putExtra(Intent.EXTRA_TEXT, orderText(order))
+            if (order.recipient.isNotBlank()) intent.putExtra(Intent.EXTRA_EMAIL, arrayOf(order.recipient))
+            if (uris.isNotEmpty()) {
+                intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                val clip = ClipData.newRawUri("Bestellbilder", uris.first()); uris.drop(1).forEach { clip.addItem(ClipData.Item(it)) }; intent.clipData = clip
+            }
+            startActivity(Intent.createChooser(intent, "Bestellanfrage: E-Mail-App auswählen"))
+        } catch (_: Exception) { model.error = "Kein passender E-Mail-Entwurf möglich. Bitte eine E-Mail-App installieren oder erneut versuchen." }
     }
     private fun shareFile(bytes: ByteArray) {
         try {
@@ -161,8 +197,9 @@ private fun java.io.InputStream.readBytesLimited(): ByteArray {
     }
 }
 
-@Composable private fun Workspace(model: WorkModel, onExport: () -> Unit, onShare: (String, String) -> Unit, onShareFile: (ByteArray) -> Unit, onImport: () -> Unit) {
+@Composable private fun Workspace(model: WorkModel, onExport: () -> Unit, onShare: (String, String) -> Unit, onShareFile: (ByteArray) -> Unit, onImport: () -> Unit, onPhoto: (PhotoTarget) -> Unit, onOrder: (PartsOrder) -> Unit) {
     val d = model.data ?: return
+    var tool by remember { mutableStateOf<String?>(null) }
     var page by rememberSaveable { mutableIntStateOf(0) }
     var dialog by remember { mutableStateOf<String?>(null) }
     var selectedAssetId by remember { mutableStateOf<String?>(null) }
@@ -171,6 +208,7 @@ private fun java.io.InputStream.readBytesLimited(): ByteArray {
     var editEntry by remember { mutableStateOf<Entry?>(null) }
     var run by remember { mutableStateOf<Round?>(null) }
     var mail by remember { mutableStateOf<Pair<String, String>?>(null) }
+    BackHandler(enabled = page == 4 && tool != null) { tool = null }
     BackHandler(enabled = page == 1 && selectedAssetId != null && dialog == null) { selectedAssetId = null }
     val tabs = listOf("Heute", "Anlagen", "Journal", "Rundgang", "Mehr")
     val icons = listOf(Icons.Outlined.Dashboard, Icons.Outlined.PrecisionManufacturing, Icons.Outlined.Assignment, Icons.Outlined.Checklist, Icons.Outlined.MoreHoriz)
@@ -208,6 +246,11 @@ private fun java.io.InputStream.readBytesLimited(): ByteArray {
                             TextButton(onClick = { selectedAssetId = a.id; page = 1 }) { Text("Anlagenakte öffnen") }
                         } }
                     }
+                    val upcoming = d.work.appointments.filter { it.status == "Geplant" && appointmentTime(it.start)?.toLocalDate()?.let { date -> date >= java.time.LocalDate.now() && date <= java.time.LocalDate.now().plusDays(7) } == true }.sortedBy { appointmentTime(it.start) }
+                    if (upcoming.isNotEmpty()) { Section("Termine der nächsten 7 Tage"); upcoming.take(3).forEach { e -> Panel {
+                        Text(e.title, fontWeight = FontWeight.Bold); Text("${e.start} · ${e.company}", color = Mint)
+                        TextButton(onClick = { page = 4; tool = "Kalender" }) { Text("Kalender öffnen") }
+                    } } }
                     Section("Für die nächste Übergabe")
                     val open = d.entries.filter { it.status != "Erledigt" }.sortedWith(compareByDescending<Entry> { priorities.indexOf(it.priority) }.thenByDescending { it.updated })
                     if (open.isEmpty()) Hint("Keine offenen Einträge. Neue Störungen erscheinen hier.")
@@ -270,6 +313,12 @@ private fun java.io.InputStream.readBytesLimited(): ByteArray {
                     } }
                 }
                 4 -> {
+                    if (tool != null) WorkTools(tool!!, d, model.busy, { tool = null }, { model.update(it) }, onPhoto, onOrder)
+                    else {
+                    Section("Werkzeuge für deinen Alltag")
+                    listOf("Zähler", "Kalender", "Anleitungen", "Bestellungen").forEach { label ->
+                        OutlinedButton(onClick = { tool = label }, modifier = Modifier.fillMaxWidth()) { Text(label) }
+                    }
                     Panel { Text("Dein Datentresor", fontSize = 23.sp, fontWeight = FontWeight.Bold)
                         Text("Lokal verschlüsselt · Ohne Internetberechtigung", color = Mint)
                         Text("Beim Verlassen wird die App gesperrt. Screenshots sind blockiert. Ein verlorenes Passwort lässt sich nicht zurücksetzen.", modifier = Modifier.padding(top = 12.dp)) }
@@ -280,7 +329,8 @@ private fun java.io.InputStream.readBytesLimited(): ByteArray {
                     OutlinedButton(onClick = { mail = "WerkLog · Schichtübergabe" to handover(d) }, modifier = Modifier.fillMaxWidth()) { Text("Schichtübergabe vorbereiten") }
                     Section("Für deinen Arbeitsalltag")
                     Hint("WerkLog dokumentiert Beobachtungen und Tätigkeiten. Freigaben, Betriebsanweisungen und eure offiziellen Meldewege bleiben maßgeblich. Keine Anlagensteuerung oder Verbindung zur GLT.")
-                    Text("WERKLOG 0.2.0 · KOTLIN / ANDROID", color = Muted, fontSize = 11.sp)
+                    Text("WERKLOG 0.3.0 · KOTLIN / ANDROID", color = Muted, fontSize = 11.sp)
+                    }
                 }
             }
             Spacer(Modifier.height(24.dp))
@@ -324,9 +374,9 @@ private fun java.io.InputStream.readBytesLimited(): ByteArray {
         DropdownMenu(expanded, { expanded = false }) { values.forEach { v -> DropdownMenuItem(text = { Text(v.second) }, onClick = { change(v.first); expanded = false }) } }
     }
 }
-@Composable internal fun Form(title: String, valid: Boolean, close: () -> Unit, save: () -> Unit, content: @Composable ColumnScope.() -> Unit) {
+@Composable internal fun Form(title: String, valid: Boolean, close: () -> Unit, save: () -> Unit, confirmLabel: String = "Speichern", content: @Composable ColumnScope.() -> Unit) {
     AlertDialog(onDismissRequest = close, title = { Text(title) }, text = { Column(Modifier.heightIn(max = 520.dp).verticalScroll(rememberScrollState()), content = content) },
-        confirmButton = { TextButton(onClick = save, enabled = valid) { Text("Speichern") } }, dismissButton = { TextButton(onClick = close) { Text("Abbrechen") } })
+        confirmButton = { TextButton(onClick = save, enabled = valid) { Text(confirmLabel) } }, dismissButton = { TextButton(onClick = close) { Text("Abbrechen") } })
 }
 @Composable private fun EntryEditor(existing: Entry?, assets: List<Asset>, initialAssetId: String?, close: () -> Unit, save: (Entry) -> Unit) {
     var asset by remember { mutableStateOf(existing?.assetId ?: initialAssetId ?: assets.firstOrNull()?.id.orEmpty()) }
