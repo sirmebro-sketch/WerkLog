@@ -25,7 +25,7 @@ class NavigationTest {
             ui.onNodeWithText("Überspringen").performClick()
             ui.onNodeWithText("Betrieb", useUnmergedTree = true).performClick()
             ui.onRoot().captureToImage().asAndroidBitmap().let { bitmap ->
-                File(context.getExternalFilesDir(null), "betrieb.png").outputStream().use { out -> bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, out) }
+                File(requireNotNull(InstrumentationRegistry.getArguments().getString("additionalTestOutputDir")), "betrieb.png").apply { parentFile?.mkdirs() }.outputStream().use { out -> bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, out) }
             }
             ui.onNodeWithText("Anlagen", substring = false).performClick()
             ui.onNodeWithText("+ Anlage anlegen").performClick()

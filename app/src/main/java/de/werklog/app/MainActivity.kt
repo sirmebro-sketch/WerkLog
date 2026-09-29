@@ -113,6 +113,7 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
         androidx.core.content.ContextCompat.registerReceiver(this, screenOff, android.content.IntentFilter(Intent.ACTION_SCREEN_OFF), androidx.core.content.ContextCompat.RECEIVER_NOT_EXPORTED)
         enableEdgeToEdge()
         receiveShare(intent)
+        OrderAttachmentProvider.cleanup(this)
         File(cacheDir, "camera").listFiles()?.forEach { it.delete() }
         File(cacheDir, "shares").listFiles()?.filter { System.currentTimeMillis() - it.lastModified() > 86_400_000 }?.forEach { it.delete() }
         setContent { CompositionLocalProvider(LocalImageLoader provides { value -> model.image(value) }, LocalTransferScope provides { active -> transferScopes = (transferScopes + if (active) 1 else -1).coerceAtLeast(0) }) { MaterialTheme(colorScheme = WerkColors) {
@@ -190,9 +191,8 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
         } catch (_: Exception) { photoFile?.delete(); photoFile = null; photoTarget = null; model.error = "Keine Kamera verfügbar. Einträge können weiterhin manuell erfasst werden." }
     }
     private fun sendOrder(order: PartsOrder) {
-        lifecycleScope.launch { try {
-            val uris = ArrayList<Uri>()
-            order.items.forEachIndexed { index, item -> if (item.image.isNotEmpty()) uris.add(OrderAttachmentProvider.register("$packageName.order-files", "Position-${index + 1}.jpg", model.image(item.image))) }
+        lifecycleScope.launch { val uris = ArrayList<Uri>(); try {
+            order.items.forEachIndexed { index, item -> if (item.image.isNotEmpty()) uris.add(withContext(Dispatchers.IO) { OrderAttachmentProvider.register(applicationContext, "$packageName.order-files", "Position-${index + 1}.jpg", model.image(item.image)) }) }
             val intent = if (uris.isEmpty()) Intent(Intent.ACTION_SENDTO, Uri.parse("mailto:")) else Intent(Intent.ACTION_SEND_MULTIPLE).setType("image/jpeg").putParcelableArrayListExtra(Intent.EXTRA_STREAM, uris)
             intent.putExtra(Intent.EXTRA_SUBJECT, "Bestellanfrage · ${order.title}").putExtra(Intent.EXTRA_TEXT, orderText(order))
             if (order.recipient.isNotBlank()) intent.putExtra(Intent.EXTRA_EMAIL, arrayOf(order.recipient))
@@ -201,7 +201,7 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
                 val clip = ClipData.newRawUri("Bestellbilder", uris.first()); uris.drop(1).forEach { clip.addItem(ClipData.Item(it)) }; intent.clipData = clip
             }
             startActivity(Intent.createChooser(intent, "Bestellanfrage: E-Mail-App auswählen"))
-        } catch (_: Exception) { model.error = "Kein passender E-Mail-Entwurf möglich. Bitte eine E-Mail-App installieren oder erneut versuchen." } }
+        } catch (_: Exception) { OrderAttachmentProvider.discard(uris); model.error = "Kein passender E-Mail-Entwurf möglich. Bitte eine E-Mail-App installieren oder erneut versuchen." } }
     }
     private fun shareFile(file: File) {
         try {
