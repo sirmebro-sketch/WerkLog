@@ -2,9 +2,9 @@
 
 Native Android-App in **Kotlin und Jetpack Compose** für den persönlichen Technikalltag. Kein Java-Quellcode, kein Konto, keine Internetberechtigung, keine Werbung oder Telemetrie.
 
-## Stand 0.1.0 – erste Implementierung, noch keine Gerätefreigabe
+## Stand 0.1.0 – Testversion, noch keine Gerätefreigabe
 
-Das Projekt wurde als Quellcode erstellt und statisch geprüft. **Der Android-Build und die JVM-Tests konnten in der Erstellungsumgebung nicht ausgeführt werden**, weil Android SDK, Gradle und Kotlin-Compiler fehlen und der SDK-Download nicht erreichbar war. Der Workflow führt die nachstehenden Prüfungen auf GitHub aus. Bis zu einem erfolgreichen Build und Gerätetest ist dies eine unbestätigte Vorabversion, keine produktionsreife App.
+Am 29.09.2026 waren Android-Build, acht JVM-Tests und Android-Lint erfolgreich. [Geprüfter Build](https://github.com/sirmebro-sketch/WerkLog/actions/runs/36547530644). Den aktuellen Status zeigt [GitHub Actions](https://github.com/sirmebro-sketch/WerkLog/actions). Ein echter Android-Gerätetest und eine visuelle Abnahme stehen noch aus; dies ist eine Testversion, keine produktionsreife App.
 
 ## Funktionen
 
