@@ -78,8 +78,9 @@ val LocalImageLoader = staticCompositionLocalOf<suspend (String) -> ByteArray> {
     TextButton(onClick = { expanded = !expanded }) { Text(if (expanded) "Bild verbergen" else "Bild anzeigen") }
     if (!expanded) return
     val loader = LocalImageLoader.current
-    val bitmap by produceState<Bitmap?>(null, encoded) {
-        value = runCatching {
+    var bitmap by remember(encoded) { mutableStateOf<Bitmap?>(null) }
+    LaunchedEffect(encoded) {
+        bitmap = runCatching {
             val bytes = if (isImageRef(encoded)) loader(encoded) else Base64.getDecoder().decode(encoded)
             try { withContext(Dispatchers.Default) {
                 require(bytes.size <= MAX_IMAGE_BYTES)

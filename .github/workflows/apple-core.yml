@@ -1,0 +1,18 @@
+name: Apple Dateiformat prüfen
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'apple/**'
+      - '.github/workflows/apple-core.yml'
+permissions:
+  contents: read
+jobs:
+  codec:
+    runs-on: macos-14
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - run: swift test
+        working-directory: apple/WerkLogCore

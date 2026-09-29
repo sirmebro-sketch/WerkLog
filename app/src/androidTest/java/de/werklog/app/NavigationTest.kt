@@ -1,6 +1,7 @@
 package de.werklog.app
 
-import androidx.activity.ComponentActivity
+import androidx.compose.ui.graphics.asAndroidBitmap
+import java.io.File
 import androidx.test.core.app.ActivityScenario
 import androidx.test.platform.app.InstrumentationRegistry
 import androidx.compose.ui.test.*
@@ -23,6 +24,9 @@ class NavigationTest {
             ui.waitUntil(15000) { ui.onAllNodesWithText("Überspringen").fetchSemanticsNodes().isNotEmpty() }
             ui.onNodeWithText("Überspringen").performClick()
             ui.onNodeWithText("Betrieb", useUnmergedTree = true).performClick()
+            ui.onRoot().captureToImage().asAndroidBitmap().let { bitmap ->
+                File(context.getExternalFilesDir(null), "betrieb.png").outputStream().use { out -> bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, out) }
+            }
             ui.onNodeWithText("Anlagen", substring = false).performClick()
             ui.onNodeWithText("+ Anlage anlegen").performClick()
             ui.onNodeWithText("Anlagenname *").performTextInput("Prüfanlage")

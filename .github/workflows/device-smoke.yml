@@ -36,7 +36,13 @@ jobs:
           arch: x86_64
           profile: pixel_6
           disable-animations: true
-          script: gradle --no-daemon connectedDebugAndroidTest
+          script: gradle --no-daemon connectedDebugAndroidTest && adb pull /sdcard/Android/data/de.werklog.app/files/betrieb.png betrieb.png
+      - uses: actions/upload-artifact@v4
+        if: success()
+        with:
+          name: Android-Layout
+          path: betrieb.png
+          retention-days: 3
       - uses: actions/upload-artifact@v4
         if: failure()
         with:

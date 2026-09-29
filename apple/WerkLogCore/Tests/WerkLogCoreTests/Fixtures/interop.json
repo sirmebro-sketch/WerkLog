@@ -1,0 +1,9 @@
+{
+  "password": "Test-\u00dcbergabe-2026",
+  "salt": "AAECAwQFBgcICQoLDA0ODw==",
+  "plaintext": "eyJzY2hlbWEiOjQsInRlc3QiOiJOdXIgc3ludGhldGlzY2hlIFRlc3RkYXRlbiJ9",
+  "metadata": "V1JLTE9HMDEAAQIDBAUGBwgJCgsMDQ4PAAECAwQFBgcICQoLxUMx6C1dMU4YWrwowzvWNBXdc3gRnTwfSGTP9Tc2vRQ4W+fZvglj2Gb25Lmsf137MrlTPYDhl8JkxFLeNxc+zQ==",
+  "reference": "img:12345678-1234-1234-1234-123456789abc",
+  "image": "/9j/2Q==",
+  "encryptedImage": "DA0ODxAREhMUFRYXZUrvBMkO2Dqak+VZ/qSAMkDVU78="
+}

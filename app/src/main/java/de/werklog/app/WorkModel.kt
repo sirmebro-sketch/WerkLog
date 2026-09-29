@@ -116,6 +116,7 @@ class WorkModel(app: Application) : AndroidViewModel(app) {
                     try { require(java.security.MessageDigest.isEqual(checkKey, currentKey)) } finally { checkKey.fill(0) }
                     repository.rekey(currentKey, nextPassword).also { resultKey = it.second }
                 }
+                getApplication<Application>().getSharedPreferences("backup", 0).edit().putLong("lastBackup", 0).apply()
                 getApplication<Application>().getSharedPreferences("biometric", 0).edit().clear().apply()
                 java.security.KeyStore.getInstance("AndroidKeyStore").apply { load(null); deleteEntry("werklog-biometric-v1") }
                 if (attempt == generation) { key?.fill(0); key = changed.second; resultKey = null; salt = changed.first; data = changed.third }
