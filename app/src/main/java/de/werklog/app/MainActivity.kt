@@ -160,7 +160,7 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
     }
     override fun onDestroy() {
         unregisterReceiver(screenOff)
-        if (!isChangingConfigurations) model.lock()
+        model.lock()
         super.onDestroy()
     }
     override fun onNewIntent(intent: Intent) {

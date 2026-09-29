@@ -53,7 +53,7 @@ class WorkModel(app: Application) : AndroidViewModel(app) {
                     }
                 }
             } catch (_: Exception) { error = "Entsperren fehlgeschlagen. Passwort oder Sicherungsdatei prüfen. Vorhandene Daten wurden nicht absichtlich ersetzt." }
-            finally { backup?.delete(); derived?.fill(0); password.fill('\u0000'); busy = false }
+            finally { exists = repository.exists(); if (data == null) { key?.fill(0); key = null; salt = null }; backup?.delete(); derived?.fill(0); password.fill('\u0000'); busy = false }
         }
     }
     fun update(next: Data) {
