@@ -94,3 +94,25 @@ Die folgenden Punkte brauchen weiterhin ein reales Gerät. Die synthetischen Spe
 - [ ] QR erzeugen, drucken und lesen; doppeltes Kennzeichen nicht automatisch zuordnen.
 - [ ] Wiederholungen am Monatsende, Benachrichtigungen mit gesperrtem Tresor und nach Neustart.
 - [ ] Empfänger-Mail-App liest alle bewusst freigegebenen Bilder; kein automatischer Versand.
+
+
+## Abnahme 0.4.1
+
+Am 29.09.2026 erfolgreich, Android-Code `99562b1a2be77b9b0baea29496a6c324193c70de`:
+
+- [x] [Android-CI](https://github.com/sirmebro-sketch/WerkLog/actions/runs/36622947048): 44 JVM-Tests, Lint, APK-Build und keine Netzwerkberechtigung.
+- [x] Profiltests: alte Daten ohne Profil, Profil-Roundtrip, verschlüsselte Sicherung/Wiederherstellung, Bildlimit, kein eigenes Profil im Anlagenpaket und kein Überschreiben des Empfängerprofils beim Import.
+- [x] [Emulator-Bedienablauf](https://github.com/sirmebro-sketch/WerkLog/actions/runs/36622947260): automatisches Biometrie-Angebot mit Später, Führung mit sichtbarer Anlagen-Kachel, Profilanlage, Passwortwechsel und anschließende persönliche Begrüßung.
+- [x] Screenshots visuell kontrolliert: kompakte Führung oberhalb der Navigation, acht Betrieb-Kacheln sichtbar, passendes Kraftwerk-Symbol.
+
+APK `WerkLog-0.4.1-Test.apk`, SHA-256 `b62ae8e65b1ec66a3e505596eb988607e5f545275ccbf2f7564a9d02ab1f946d`.
+
+Noch auf dem realen Gerät prüfen:
+
+- [ ] Auf echtem Gerät neu einrichten: nach Passwort automatisch Fingerabdruck-Angebot; Aktivieren, Abbrechen und Später testen.
+- [ ] Führung ohne Abdunklung: Seite und Navigation bleiben sichtbar; Weiter, Zurück, Überspringen, Neustart über Einstellung.
+- [ ] Führung bei 150 % Schrift und im Querformat: Text und Aktionen erreichbar.
+- [ ] Profil mit Name, Funktion, Bereich und Dienstkontakt erstellen, bearbeiten und löschen; Arbeitsdaten bleiben erhalten.
+- [ ] Profilfoto aus Kamera/Galerie, Ausrichtung, Bildaustausch und Entfernen prüfen.
+- [ ] Profil nach Sperren/Entsperren, Neustart, Passwortwechsel und Vollsicherungs-Wiederherstellung vorhanden.
+- [ ] Anlagenfreigabe und Mail-Vorschau enthalten keine ungefragt übernommenen Profildaten.

@@ -2,6 +2,8 @@
 
 ## Ergänzungen 0.4.1
 
+44 JVM-Tests, Android-Build und Emulator-Bedienablauf erfolgreich; Führung und Kraftwerk-Symbol anhand der Emulatoraufnahmen visuell geprüft. Details: [DEVICE-TEST.md](DEVICE-TEST.md).
+
 - Kompakte Führung reserviert Platz oberhalb der Navigation, ohne die Seite abzudunkeln; Zurück/Weiter/Überspringen.
 - Nach erstmaligem Erstellen des Passworts freiwilliges Fingerabdruck-Angebot vor der Führung; Android prüft die verfügbare starke Biometrie.
 - Lokales Profil mit Foto und optionalen dienstlichen Angaben; bearbeiten, Foto entfernen, Profil löschen. Keine automatische Weitergabe.
