@@ -39,7 +39,7 @@ class BiometricLock(private val activity: FragmentActivity) {
             val prompt = BiometricPrompt(activity, ContextCompat.getMainExecutor(activity), object : BiometricPrompt.AuthenticationCallback() {
                 override fun onAuthenticationSucceeded(auth: BiometricPrompt.AuthenticationResult) {
                     try {
-                        val c = auth.cryptoObject?.cipher ?: error("Keine Schlüssel-Freigabe")
+                        val c = auth.cryptoObject?.cipher ?: throw IllegalStateException("Keine Schlüssel-Freigabe")
                         if (enableKey != null) {
                             val wrapped = c.doFinal(enableKey)
                             prefs.edit().putString("wrapped", Base64.getEncoder().encodeToString(wrapped)).putString("iv", Base64.getEncoder().encodeToString(c.iv)).apply(); result(null)

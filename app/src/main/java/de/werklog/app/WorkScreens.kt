@@ -25,6 +25,7 @@ import java.util.Locale
 }
 @Composable private fun MeterScreen(d: Data, busy: Boolean, save: (Data) -> Unit, photo: (PhotoTarget) -> Unit) {
     var edit by remember { mutableStateOf(false) }; var selected by remember { mutableStateOf<Meter?>(null) }
+    var remove by remember { mutableStateOf<Meter?>(null) }
     var reading by remember { mutableStateOf<Meter?>(null) }
     Section("Zähler & Ablesungen")
     Hint("Zähler fest einer Anlage zuordnen. Fotoerkennung läuft offline; jeder Wert wird vor dem Speichern geprüft. Fotos bleiben nicht im Archiv.")
@@ -37,11 +38,14 @@ import java.util.Locale
         if (meter.note.isNotBlank()) Text(meter.note)
         Row { TextButton(onClick = { photo(PhotoTarget("meter", meter.id)) }, enabled = !busy) { Text("Zähler fotografieren") }
             TextButton(onClick = { reading = meter }, enabled = !busy) { Text("Manuell") } }
-        TextButton(onClick = { selected = meter; edit = true }, enabled = !busy) { Text("Zähler bearbeiten") }
+        TextButton(onClick = { selected = meter; edit = true }, enabled = !busy) { Text("Zähler bearbeiten") }; TextButton(onClick = { remove = meter }, enabled = !busy) { Text("Zähler löschen") }
         ReadingTrend(history)
         val delta = history.firstOrNull()?.let { readingDelta(it, history.getOrNull(1)) }
         if (delta != null) Text("Seit letzter Ablesung: $delta ${meter.unit}", color = Mint)
         history.take(5).forEach { Text("${stamp(it.created)} · ${it.value} ${it.unit}", color = Muted, fontSize = 12.sp) }
+    } }
+    remove?.let { m -> ConfirmRemoval("Zähler löschen?", "Die Ablesungen bleiben als Messwerte im Journal erhalten; die Zählerzuordnung entfällt.", busy, { remove = null }) {
+        save(d.copy(readings = d.readings.map { if (it.meterId == m.id) it.copy(meterId = "") else it }, work = d.work.copy(meters = d.work.meters.filterNot { it.id == m.id })))
     } }
     if (edit) MeterEditor(selected, d, { edit = false }) { meter -> save(d.copy(work = d.work.copy(meters = d.work.meters.filterNot { it.id == meter.id } + meter))); edit = false }
     reading?.let { m -> var value by remember { mutableStateOf("") }; var note by remember { mutableStateOf("") }
@@ -70,6 +74,7 @@ import java.util.Locale
     var month by remember { mutableStateOf(YearMonth.now()) }; var day by remember { mutableStateOf(LocalDate.now()) }
     var all by remember { mutableStateOf(false) }; var editing by remember { mutableStateOf(false) }; var selected by remember { mutableStateOf<Appointment?>(null) }
     val context = androidx.compose.ui.platform.LocalContext.current
+    var remove by remember { mutableStateOf<Appointment?>(null) }
     Section("Kraftwerkkalender")
     TextButton(onClick = { (context as? MainActivity)?.enableReminders() }) { Text("Lokale Benachrichtigungen erlauben") }
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
@@ -107,9 +112,10 @@ import java.util.Locale
                 .putExtra(android.provider.CalendarContract.Events.TITLE, event.title).putExtra(android.provider.CalendarContract.Events.DESCRIPTION, "${event.company}\n${event.responsible}\n${event.note}")
                 .putExtra(android.provider.CalendarContract.EXTRA_EVENT_BEGIN_TIME, begin).putExtra(android.provider.CalendarContract.EXTRA_EVENT_END_TIME, begin + event.minutes * 60000L)) }
         }) { Text("Kopie im Systemkalender öffnen") }
-        TextButton(onClick = { selected = d.work.appointments.single { it.id == event.id }; editing = true }, enabled = !busy) { Text("Termin bearbeiten") }
+        TextButton(onClick = { selected = d.work.appointments.single { it.id == event.id }; editing = true }, enabled = !busy) { Text("Termin bearbeiten") }; TextButton(onClick = { remove = event }, enabled = !busy) { Text("Termin / Serie löschen") }
     } }
     Hint("Systemkalender-Kopien können je nach Kalenderkonto synchronisiert werden; keine automatische Übertragung. Wiederholungen werden für die nächsten 6 Monate angezeigt. Bearbeiten ändert die gesamte Serie. Erinnerungen sind lokal und können durch Android verzögert werden.")
+    remove?.let { event -> ConfirmRemoval("Termin / Serie löschen?", "Alle Wiederholungen dieses Termins werden entfernt. Kopien im Systemkalender bleiben unverändert.", busy, { remove = null }) { save(d.copy(work = d.work.copy(appointments = d.work.appointments.filterNot { it.id == event.id }))) } }
     if (editing) AppointmentEditor(selected, day, d, { editing = false }) { e -> save(d.copy(work = d.work.copy(appointments = d.work.appointments.filterNot { it.id == e.id } + e))); editing = false }
 }
 @Composable private fun AppointmentEditor(old: Appointment?, date: LocalDate, d: Data, close: () -> Unit, save: (Appointment) -> Unit) {
@@ -133,6 +139,7 @@ import java.util.Locale
     var selected by remember { mutableStateOf<String?>(null) }; var editor by remember { mutableStateOf(false) }
     var stepEditor by remember { mutableStateOf(false) }; var selectedStep by remember { mutableStateOf<GuideStep?>(null) }
     var deletion by remember { mutableStateOf<GuideStep?>(null) }
+    var deleteGuide by remember { mutableStateOf(false) }
     val guide = d.work.guides.find { it.id == selected }
     fun update(next: Guide) = save(d.copy(work = d.work.copy(guides = d.work.guides.filterNot { it.id == next.id } + next.copy(revision = (d.work.guides.find { it.id == next.id }?.revision ?: 0) + 1))))
     Section("Eigene Anleitungen")
@@ -148,7 +155,7 @@ import java.util.Locale
         Text(guide.title, fontSize = 24.sp, fontWeight = FontWeight.Bold)
         Text("Version ${guide.revision} · Geprüft: ${guide.checked.ifBlank { "Noch nicht" }}", color = Muted)
         TextButton(onClick = { update(guide.copy(checked = LocalDate.now().format(DateTimeFormatter.ofPattern("dd.MM.uuuu")))) }, enabled = !busy) { Text("Heute inhaltlich geprüft") }
-        TextButton(onClick = { editor = true }, enabled = !busy) { Text("Titel / Anlage bearbeiten") }
+        TextButton(onClick = { editor = true }, enabled = !busy) { Text("Titel / Anlage bearbeiten") }; TextButton(onClick = { deleteGuide = true }, enabled = !busy) { Text("Anleitung löschen") }
         guide.steps.forEachIndexed { index, step -> Panel {
             Text("${index + 1}. ${step.title}", fontSize = 20.sp, fontWeight = FontWeight.Bold); Text(step.body); StoredPhoto(step.image)
             Row { TextButton(onClick = { selectedStep = step; stepEditor = true }, enabled = !busy) { Text("Bearbeiten") }
@@ -160,6 +167,7 @@ import java.util.Locale
         Button(onClick = { selectedStep = null; stepEditor = true }, enabled = !busy && guide.steps.size < 100) { Text("+ Nächster Schritt") }
         Hint("Bilder: max. 512 KiB pro Bild, insgesamt höchstens 500 Bilder für Anleitungen und Bestelllisten. Fotos erst nach dem Speichern des Schritts hinzufügen.")
     }
+    if (deleteGuide && guide != null) ConfirmRemoval("Anleitung löschen?", "Alle Schritte und Bilder dieser Anleitung werden entfernt.", busy, { deleteGuide = false }) { save(d.copy(work = d.work.copy(guides = d.work.guides.filterNot { it.id == guide.id }))); selected = null }
     if (editor) {
         var title by remember { mutableStateOf(guide?.title ?: "") }; var asset by remember { mutableStateOf(guide?.assetId ?: "") }
         Form("Anleitung", title.isNotBlank(), { editor = false }, { val next = (guide ?: Guide(title = title.trim())).copy(title = title.trim(), assetId = asset); update(next); selected = next.id; editor = false }) {
@@ -182,6 +190,7 @@ import java.util.Locale
     var selected by remember { mutableStateOf<String?>(null) }; var editor by remember { mutableStateOf(false) }
     var itemEditor by remember { mutableStateOf(false) }; var selectedItem by remember { mutableStateOf<OrderItem?>(null) }
     var preview by remember { mutableStateOf(false) }; var deletion by remember { mutableStateOf<OrderItem?>(null) }
+    var deleteOrder by remember { mutableStateOf(false) }
     val order = d.work.orders.find { it.id == selected }
     fun update(next: PartsOrder) = save(d.copy(work = d.work.copy(orders = d.work.orders.filterNot { it.id == next.id } + next)))
     Section("Bestelllisten")
@@ -191,7 +200,7 @@ import java.util.Locale
             TextButton(onClick = { selected = o.id }) { Text("Öffnen / weiter erfassen") } } }
     } else {
         TextButton(onClick = { selected = null }) { Text("‹ Alle Bestelllisten") }; Text(order.title, fontSize = 24.sp, fontWeight = FontWeight.Bold)
-        TextButton(onClick = { editor = true }, enabled = !busy) { Text("Titel / E-Mail-Adresse bearbeiten") }
+        TextButton(onClick = { editor = true }, enabled = !busy) { Text("Titel / E-Mail-Adresse bearbeiten") }; TextButton(onClick = { deleteOrder = true }, enabled = !busy) { Text("Bestellliste löschen") }
         order.items.forEachIndexed { index, item -> Panel {
             Text("${index + 1}. ${item.quantity} ${item.unit} · ${item.name}", fontSize = 19.sp, fontWeight = FontWeight.Bold)
             if (item.assetId.isNotBlank()) Text("Nur lokal: ${assetName(d, item.assetId)}", color = Mint)
@@ -208,6 +217,7 @@ import java.util.Locale
         if (order.entryId.isNotBlank()) Text("Vorgang: ${d.entries.find { it.id == order.entryId }?.title ?: "Archiviert"}")
         Hint("Die Anlagenzuordnung bleibt lokal. Nur Bezeichnung, Menge, Zweck und hinzugefügte Bilder werden übergeben. Versand erfolgt ausschließlich durch dich in der Mail-App.")
     }
+    if (deleteOrder && order != null) ConfirmRemoval("Bestellliste löschen?", "Alle Positionen und Bilder dieser lokalen Liste werden entfernt. Bereits versandte E-Mails bleiben unverändert.", busy, { deleteOrder = false }) { save(d.copy(work = d.work.copy(orders = d.work.orders.filterNot { it.id == order.id }))); selected = null }
     if (editor) {
         var title by remember { mutableStateOf(order?.title ?: "") }; var recipient by remember { mutableStateOf(order?.recipient ?: "") }; var delivery by remember { mutableStateOf(order?.delivery ?: "") }
         Form("Bestellliste", (delivery.isBlank() || parseServiceDate(delivery) != null) && title.isNotBlank() && (recipient.isBlank() || (recipient.contains('@') && !recipient.contains('\n'))), { editor = false }, {

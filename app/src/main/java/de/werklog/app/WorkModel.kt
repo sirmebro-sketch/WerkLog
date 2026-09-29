@@ -76,6 +76,28 @@ class WorkModel(app: Application) : AndroidViewModel(app) {
         val k = key?.copyOf() ?: error("Tresor gesperrt")
         return try { withContext(Dispatchers.IO) { repository.image(value, k) } } finally { k.fill(0) }
     }
+    fun importShare(opened: OpenShare, target: String?, replace: Boolean) {
+        val current = data; val k = key?.copyOf(); val s = salt?.copyOf()
+        if (busy || current == null || k == null || s == null) { k?.fill(0); opened.close(); return }
+        busy = true; val attempt = generation
+        viewModelScope.launch {
+            try {
+                val result = withContext(Dispatchers.IO) {
+                    val candidate = if (target == null) importPackage(current, opened.data) else mergePackage(current, opened.data, target, replace)
+                    validateWork(candidate.work, candidate.assets.map { it.id }.toSet())
+                    val used = imageValues(candidate).toSet()
+                    val replacements = mutableMapOf<String, String>()
+                    for (image in imageValues(opened.data).filter { it.isNotEmpty() && it in used }.distinct()) {
+                        val bytes = opened.image(image)
+                        try { replacements[image] = repository.addImage(bytes, k) } finally { bytes.fill(0) }
+                    }
+                    repository.save(mapImages(candidate) { replacements[it] ?: it }, k, s)
+                }
+                if (attempt == generation) data = result
+            } catch (_: Exception) { error = "Import fehlgeschlagen. Bildlimit oder freien Speicher prüfen. Bestehende Einträge bleiben erhalten." }
+            finally { k.fill(0); opened.close(); busy = false }
+        }
+    }
     fun changePassword(oldPassword: CharArray, nextPassword: CharArray) {
         val currentKey = key?.copyOf()
         if (busy || currentKey == null) { currentKey?.fill(0); oldPassword.fill('\u0000'); nextPassword.fill('\u0000'); return }

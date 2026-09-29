@@ -53,6 +53,7 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
     fun biometricAvailable() = biometric.enabled()
     fun unlockBiometric() = biometric.authenticate(result = { it?.let(model::unlockKey) }, error = { model.error = it })
     private val model: WorkModel by viewModels()
+    private var requestedAsset by mutableStateOf<String?>(null)
     private var sourceTarget by mutableStateOf<PhotoTarget?>(null)
     private val gallery = registerForActivityResult(ActivityResultContracts.GetContent()) { uri ->
         val target = photoTarget; photoTarget = null
@@ -80,7 +81,7 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
         if (success && file != null && target != null) readyPhoto = file to target else file?.delete()
     }
     private var pendingBackup: File? = null
-    private var importBytes by mutableStateOf<ByteArray?>(null)
+    private var importBytes by mutableStateOf<File?>(null)
     private val importAsset = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri -> if (uri != null) readShare(uri) }
     private var restoreBytes by mutableStateOf<File?>(null)
     private val export = registerForActivityResult(ActivityResultContracts.CreateDocument("application/octet-stream")) { uri ->
@@ -115,16 +116,14 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
                             try { model.backup(file); pendingBackup = file; export.launch("WerkLog-${java.time.LocalDate.now()}.werklog") }
                             catch (_: Exception) { file.delete(); model.error = "Sicherung konnte nicht erstellt werden." }
                         }
-                    }, onShare = ::share, onShareFile = ::shareFile, onImport = { importAsset.launch(arrayOf("*/*")) }, onPhoto = ::requestPhoto, onOrder = ::sendOrder)
+                    }, onShare = ::share, onShareFile = ::shareFile, onImport = { importAsset.launch(arrayOf("*/*")) }, onPhoto = ::requestPhoto, onOrder = ::sendOrder, requestedAsset = requestedAsset, assetOpened = { requestedAsset = null })
                     if (model.data != null && readyPhoto != null) {
                         val pending = readyPhoto!!
-                        PhotoReview(pending.first, pending.second, model.data!!, model.busy, { pending.first.delete(); readyPhoto = null }) { next ->
+                        PhotoReview(pending.first, pending.second, model.data!!, model.busy, { pending.first.delete(); readyPhoto = null }, { requestedAsset = it; readyPhoto = null }) { next ->
                             try { model.update(next) } catch (_: Exception) { model.error = "Bild konnte nicht gespeichert werden. Größenbegrenzung prüfen." }
                         }
                     }
-                    if (model.data != null && importBytes != null) ImportAssetDialog(importBytes!!, model.busy, { importBytes = null }) { incoming ->
-                        model.data?.let { model.update(importPackage(it, incoming)) }
-                    }
+                    if (model.data != null && importBytes != null) ImportAssetDialog(importBytes!!, model.data!!, model.busy, { importBytes?.delete(); importBytes = null }) { incoming, target, replace -> model.importShare(incoming, target, replace) }
                 }
                 sourceTarget?.let { target -> AlertDialog(onDismissRequest = { sourceTarget = null }, title = { Text("Bild hinzufügen") },
                     text = { Text("Das Bild wird verkleinert und verschlüsselt gespeichert. Bei Galerieauswahl bleibt das Original in deiner Galerie unverändert.") },
@@ -146,14 +145,13 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
         if (uri.scheme != "content") { model.error = "Bitte eine lokale Freigabedatei über den Dateidialog öffnen."; return }
         lifecycleScope.launch {
             try {
-                val bytes = withContext(Dispatchers.IO) {
-                    contentResolver.openInputStream(uri)?.use { it.readBytesLimited() } ?: error("Kein Zugriff")
-                }
-                Exchange.checkEnvelope(bytes); importBytes = bytes
-            } catch (_: Exception) { model.error = "Keine gültige Anlagenfreigabe oder Datei größer als 8 MB." }
+                val file = File(cacheDir, "import-${newId()}.werkshare")
+                withContext(Dispatchers.IO) { contentResolver.openInputStream(uri)?.use { input -> file.outputStream().use { input.copyBounded(it, MAX_ARCHIVE_BYTES) } } ?: error("Kein Zugriff") }
+                importBytes = file
+            } catch (_: Exception) { model.error = "Anlagenfreigabe nicht lesbar oder größer als 384 MiB." }
         }
     }
-    private fun requestPhoto(target: PhotoTarget) { if (target.kind == "meter") takePhoto(target) else sourceTarget = target }
+    private fun requestPhoto(target: PhotoTarget) { if (target.kind in listOf("meter", "asset")) takePhoto(target) else sourceTarget = target }
     private fun takePhoto(target: PhotoTarget) {
         try {
             val folder = File(cacheDir, "camera").also { it.mkdirs() }
@@ -176,10 +174,8 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
             startActivity(Intent.createChooser(intent, "Bestellanfrage: E-Mail-App auswählen"))
         } catch (_: Exception) { model.error = "Kein passender E-Mail-Entwurf möglich. Bitte eine E-Mail-App installieren oder erneut versuchen." } }
     }
-    private fun shareFile(bytes: ByteArray) {
+    private fun shareFile(file: File) {
         try {
-            val directory = File(cacheDir, "shares").also { it.mkdirs() }
-            val file = File(directory, "WerkLog-${newId()}.werkshare").also { it.writeBytes(bytes) }
             val uri = FileProvider.getUriForFile(this, "$packageName.files", file)
             val intent = Intent(Intent.ACTION_SEND).setType("application/vnd.werklog.asset")
                 .putExtra(Intent.EXTRA_STREAM, uri).putExtra(Intent.EXTRA_SUBJECT, "WerkLog · verschlüsselte Anlagenfreigabe")
@@ -235,7 +231,7 @@ private fun java.io.InputStream.readBytesLimited(): ByteArray {
     }
 }
 
-@Composable private fun Workspace(model: WorkModel, onExport: () -> Unit, onShare: (String, String) -> Unit, onShareFile: (ByteArray) -> Unit, onImport: () -> Unit, onPhoto: (PhotoTarget) -> Unit, onOrder: (PartsOrder) -> Unit) {
+@Composable private fun Workspace(model: WorkModel, onExport: () -> Unit, onShare: (String, String) -> Unit, onShareFile: (File) -> Unit, onImport: () -> Unit, onPhoto: (PhotoTarget) -> Unit, onOrder: (PartsOrder) -> Unit, requestedAsset: String?, assetOpened: () -> Unit) {
     val d = model.data ?: return
     var tool by remember { mutableStateOf<String?>(null) }
     var page by remember { mutableIntStateOf(0) }
@@ -244,10 +240,13 @@ private fun java.io.InputStream.readBytesLimited(): ByteArray {
     var preselectedAssetId by remember { mutableStateOf<String?>(null) }
     var editAsset by remember { mutableStateOf<Asset?>(null) }
     var editEntry by remember { mutableStateOf<Entry?>(null) }
+    var editRound by remember { mutableStateOf<Round?>(null) }
+    var removal by remember { mutableStateOf<Pair<String, String>?>(null) }
     var run by remember { mutableStateOf<Round?>(null) }
     var mail by remember { mutableStateOf<Pair<String, String>?>(null) }
     BackHandler(enabled = page == 4 && tool != null) { tool = null }
     BackHandler(enabled = page == 1 && selectedAssetId != null && dialog == null) { selectedAssetId = null }
+    LaunchedEffect(requestedAsset) { requestedAsset?.let { selectedAssetId = it; page = 1; tool = null; assetOpened() } }
     val titles = listOf("Heute", "Anlagen", "Journal", "Rundgang", "Betrieb", "Einstellung")
     val context = androidx.compose.ui.platform.LocalContext.current
     val tourPrefs = context.getSharedPreferences("onboarding", 0)
@@ -325,6 +324,7 @@ private fun java.io.InputStream.readBytesLimited(): ByteArray {
                     } else {
                         var query by remember { mutableStateOf("") }
                         Field(query, { query = it }, "Anlagen, Kennzeichen, Wissen und Anleitungen suchen")
+                        OutlinedButton(onClick = { onPhoto(PhotoTarget("asset", "")) }, enabled = !model.busy) { Text("Anlagen-Code fotografieren") }
                         Button(onClick = { editAsset = null; dialog = "asset" }, enabled = !model.busy) { Text("+ Anlage anlegen") }
                         val filtered = searchAssets(d, query)
                         if (filtered.isEmpty()) Hint("Keine Anlagen gefunden. Lege deine erste Anlage an oder ändere die Suche.")
@@ -355,18 +355,21 @@ private fun java.io.InputStream.readBytesLimited(): ByteArray {
                             Text(assetName(d, r.assetId), color = Mint, fontSize = 12.sp); Text(r.label, fontWeight = FontWeight.Bold)
                             Text("${r.value} ${r.unit}", fontSize = 28.sp); Text(stamp(r.created), color = Muted, fontSize = 12.sp)
                             if (r.note.isNotBlank()) Text(r.note)
+                            TextButton(onClick = { removal = "reading" to r.id }, enabled = !model.busy) { Text("Messwert löschen") }
                         } }
                     }
                 }
                 3 -> {
                     Hint("Eigene Checklisten für wiederkehrende Kontrollen. Ein übersprungener Punkt bleibt ausdrücklich als ungeprüft dokumentiert.")
-                    Button(onClick = { dialog = "round" }, enabled = !model.busy) { Text("+ Checkliste erstellen") }
+                    Button(onClick = { editRound = null; dialog = "round" }, enabled = !model.busy) { Text("+ Checkliste erstellen") }
                     d.rounds.forEach { r -> Panel { Text(r.title, fontSize = 21.sp, fontWeight = FontWeight.Bold); Text("${r.checks.size} Prüfpunkte", color = Muted)
-                        Button(onClick = { run = r }, enabled = !model.busy) { Text("Rundgang starten") } } }
+                        Button(onClick = { run = r }, enabled = !model.busy) { Text("Rundgang starten") }
+                        Row { TextButton(onClick = { editRound = r; dialog = "round" }, enabled = !model.busy) { Text("Bearbeiten") }; TextButton(onClick = { removal = "round" to r.id }, enabled = !model.busy) { Text("Löschen") } } } }
                     Section("Abgeschlossene Rundgänge")
                     if (d.runs.isEmpty()) Hint("Noch kein Rundgang dokumentiert.")
                     d.runs.sortedByDescending { it.created }.forEach { r -> Panel { Text(r.title, fontWeight = FontWeight.Bold); Text(stamp(r.created), color = Muted)
                         r.results.forEach { Text(it, modifier = Modifier.padding(top = 6.dp)) }; if (r.note.isNotBlank()) Text(r.note)
+                        TextButton(onClick = { removal = "run" to r.id }, enabled = !model.busy) { Text("Protokoll löschen") }
                     } }
                 }
                 4 -> {
@@ -414,9 +417,21 @@ private fun java.io.InputStream.readBytesLimited(): ByteArray {
     }
     if (dialog == "password") PasswordChangeDialog(model.busy, { dialog = null }) { old, next -> model.changePassword(old, next); dialog = null }
     if (dialog == "asset") AssetEditor(editAsset, d.assets, { dialog = null }) { a -> model.update(d.copy(assets = d.assets.filterNot { it.id == a.id } + a)); dialog = null }
-    if (dialog == "entry") EntryEditor(editEntry, d.assets, d.work.templates, preselectedAssetId, { dialog = null }) { e -> model.update(d.copy(entries = d.entries.filterNot { it.id == e.id } + e)); dialog = null }
+    if (dialog == "entry") EntryEditor(editEntry, d.assets, d.work.templates, preselectedAssetId, { dialog = null }, { editEntry?.let { removal = "entry" to it.id }; dialog = null }, { e ->
+        model.update(d.copy(work = d.work.copy(orders = d.work.orders + PartsOrder(title = e.title, entryId = e.id, items = listOf(OrderItem(name = e.title, quantity = "1", assetId = e.assetId)))))); dialog = null; page = 4; tool = "Bestellungen"
+    }, { e ->
+        model.update(d.copy(work = d.work.copy(appointments = d.work.appointments + Appointment(title = e.title, start = formatAppointment(java.time.LocalDate.now().plusDays(1).atTime(8, 0)), assetId = e.assetId, note = e.note)))); dialog = null; page = 4; tool = "Kalender"
+    }) { e -> model.update(d.copy(entries = d.entries.filterNot { it.id == e.id } + e)); dialog = null }
     if (dialog == "reading") ReadingEditor(d.assets, preselectedAssetId, { dialog = null }) { r -> model.update(d.copy(readings = d.readings + r)); dialog = null }
-    if (dialog == "round") RoundEditor({ dialog = null }) { r -> model.update(d.copy(rounds = d.rounds + r)); dialog = null }
+    if (dialog == "round") RoundEditor(editRound, { dialog = null }) { r -> model.update(d.copy(rounds = d.rounds.filterNot { it.id == r.id } + r)); dialog = null }
+    removal?.let { (kind, id) -> ConfirmRemoval("Eintrag löschen?", "Dieser lokale Eintrag wird entfernt. Bereits erstellte Sicherungen und abgeschlossene Rundgänge bleiben unverändert.", model.busy, { removal = null }) {
+        model.update(when (kind) {
+            "entry" -> d.copy(entries = d.entries.filterNot { it.id == id })
+            "reading" -> d.copy(readings = d.readings.filterNot { it.id == id })
+            "round" -> d.copy(rounds = d.rounds.filterNot { it.id == id })
+            else -> d.copy(runs = d.runs.filterNot { it.id == id })
+        })
+    } }
     run?.let { r -> RoundRunner(r, { run = null }) { result -> model.update(d.copy(runs = d.runs + result)); run = null } }
     mail?.let { m -> AlertDialog(onDismissRequest = { mail = null }, title = { Text("E-Mail-Vorschau") }, text = {
         Column(Modifier.heightIn(max = 450.dp).verticalScroll(rememberScrollState())) {
@@ -455,7 +470,7 @@ private fun java.io.InputStream.readBytesLimited(): ByteArray {
     AlertDialog(onDismissRequest = close, title = { Text(title) }, text = { Column(Modifier.heightIn(max = 520.dp).verticalScroll(rememberScrollState()), content = content) },
         confirmButton = { TextButton(onClick = save, enabled = valid) { Text(confirmLabel) } }, dismissButton = { TextButton(onClick = close) { Text("Abbrechen") } })
 }
-@Composable private fun EntryEditor(existing: Entry?, assets: List<Asset>, templates: List<EntryTemplate>, initialAssetId: String?, close: () -> Unit, save: (Entry) -> Unit) {
+@Composable private fun EntryEditor(existing: Entry?, assets: List<Asset>, templates: List<EntryTemplate>, initialAssetId: String?, close: () -> Unit, delete: () -> Unit, order: (Entry) -> Unit, appointment: (Entry) -> Unit, save: (Entry) -> Unit) {
     var asset by remember { mutableStateOf(existing?.assetId ?: initialAssetId ?: assets.firstOrNull()?.id.orEmpty()) }
     var title by remember { mutableStateOf(existing?.title ?: "") }; var note by remember { mutableStateOf(existing?.note ?: "") }
     var priority by remember { mutableStateOf(existing?.priority ?: "Normal") }; var status by remember { mutableStateOf(existing?.status ?: "Offen") }
@@ -467,6 +482,11 @@ private fun java.io.InputStream.readBytesLimited(): ByteArray {
         Picker("Anlage", assets.map { it.id to it.name }, asset) { asset = it }; Field(title, { title = it }, "Kurzbeschreibung *")
         Field(note, { note = it }, "Beobachtung, Maßnahmen, nächste Schritte", 4); Text("Priorität"); Choices(priorities, priority) { priority = it }
         Text("Status"); Choices(statuses, status) { status = it }; Field(minutes, { minutes = it }, "Zeitaufwand in Minuten", numeric = true)
+        if (existing != null) {
+            TextButton(onClick = { order(existing) }) { Text("Teileanforderung aus diesem Vorgang") }
+            TextButton(onClick = { appointment(existing) }) { Text("Folgetermin anlegen (morgen 08:00, danach bearbeiten)") }
+            TextButton(onClick = delete) { Text("Vorgang löschen", color = MaterialTheme.colorScheme.error) }
+        }
         if (existing != null) TextButton(onClick = { save(existing.copy(id = newId(), title = "$title (Kopie)", note = note, status = "Offen", created = System.currentTimeMillis(), updated = System.currentTimeMillis(), minutes = 0)) }) { Text("Als neue Tätigkeit duplizieren") }
     }
 }
@@ -478,10 +498,10 @@ private fun java.io.InputStream.readBytesLimited(): ByteArray {
     }) { Picker("Anlage", assets.map { it.id to it.name }, asset) { asset = it }; Field(label, { label = it }, "Messpunkt *")
         Field(value, { value = it }, "Messwert *", numeric = true); Field(unit, { unit = it }, "Einheit *"); Field(note, { note = it }, "Beobachtung", 2) }
 }
-@Composable private fun RoundEditor(close: () -> Unit, save: (Round) -> Unit) {
-    var title by remember { mutableStateOf("") }; var points by remember { mutableStateOf("") }
+@Composable private fun RoundEditor(existing: Round?, close: () -> Unit, save: (Round) -> Unit) {
+    var title by remember { mutableStateOf(existing?.title ?: "") }; var points by remember { mutableStateOf(existing?.checks?.joinToString("\n") ?: "") }
     val checks = points.lines().map { it.trim() }.filter { it.isNotEmpty() }
-    Form("Checkliste erstellen", title.isNotBlank() && checks.size in 1..100, close, { save(Round(title = title.trim(), checks = checks)) }) {
+    Form("Checkliste erstellen", title.isNotBlank() && checks.size in 1..100, close, { save(Round(id = existing?.id ?: newId(), title = title.trim(), checks = checks)) }) {
         Field(title, { title = it }, "Name *"); Field(points, { points = it }, "Ein Prüfpunkt pro Zeile *", 6)
         Hint("Nur eure freigegebenen Kontrollen übernehmen. Maximal 100 Punkte.")
     }

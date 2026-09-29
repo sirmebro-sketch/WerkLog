@@ -15,7 +15,7 @@ import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.delay
 
 @Composable internal fun AssetDetails(asset: Asset, data: Data, busy: Boolean, back: () -> Unit, edit: () -> Unit,
-    save: (Data) -> Unit, addEntry: () -> Unit, addReading: () -> Unit, editEntry: (Entry) -> Unit, shareFile: (ByteArray) -> Unit) {
+    save: (Data) -> Unit, addEntry: () -> Unit, addReading: () -> Unit, editEntry: (Entry) -> Unit, shareFile: (java.io.File) -> Unit) {
     var section by remember(asset.id) { mutableStateOf("Übersicht") }
     var credentialEditor by remember { mutableStateOf(false) }
     var selectedCredential by remember { mutableStateOf<Credential?>(null) }
@@ -23,6 +23,8 @@ import kotlinx.coroutines.delay
     var selectedInfo by remember { mutableStateOf<AssetInfo?>(null) }
     var sharing by remember { mutableStateOf(false) }
     var shareInfo by remember { mutableStateOf<AssetInfo?>(null) }
+    var qr by remember { mutableStateOf(false) }
+    var deleteAsset by remember { mutableStateOf(false) }
     var deletion by remember { mutableStateOf<Pair<String, String>?>(null) }
     TextButton(onClick = back) { Text("‹ Alle Anlagen") }
     Text(asset.name, fontSize = 28.sp, fontWeight = FontWeight.Bold)
@@ -31,6 +33,8 @@ import kotlinx.coroutines.delay
     Row {
         TextButton(onClick = { save(data.copy(assets = data.assets.map { if (it.id == asset.id) it.copy(favorite = !it.favorite) else it })) }, enabled = !busy) { Text(if (asset.favorite) "★ Favorit entfernen" else "☆ Als Favorit merken") }
     }
+    TextButton(onClick = { qr = true }) { Text("Anlagen-QR-Code") }
+    if (qr) AssetQrDialog(asset) { qr = false }
     if (asset.parentId.isNotBlank()) Text("Gehört zu: ${assetName(data, asset.parentId)}", color = Muted)
     Choices(listOf("Übersicht", "Wissen", "Zugänge", "Verlauf"), section) { section = it }
     TextButton(onClick = { shareInfo = null; sharing = true }, enabled = !busy) { Text("Anlagenakte verschlüsselt teilen") }
@@ -96,6 +100,8 @@ import kotlinx.coroutines.delay
                 Text(stamp(r.created), color = Muted, fontSize = 12.sp); if (r.note.isNotBlank()) Text(r.note) } }
         }
     }
+    TextButton(onClick = { deleteAsset = true }, enabled = !busy) { Text("Anlage löschen", color = MaterialTheme.colorScheme.error) }
+    if (deleteAsset) ConfirmRemoval("${asset.name} löschen?", "Entfernt diese Anlage, ihre Zugangsdaten, Wissenseinträge, Tätigkeiten, Zähler und Messwerte. Anleitungen, Termine, Bestellungen und untergeordnete Anlagen bleiben ohne diese Zuordnung erhalten. Sicherungen bleiben unverändert.", busy, { deleteAsset = false }) { save(removeAsset(data, asset.id)); back() }
     if (sharing) ExportAssetDialog(data, asset, shareInfo, { sharing = false }, shareFile)
     if (credentialEditor) CredentialEditor(asset.id, selectedCredential, { credentialEditor = false }) { c ->
         save(data.copy(credentials = data.credentials.filterNot { it.id == c.id } + c)); credentialEditor = false

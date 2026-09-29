@@ -10,7 +10,7 @@ import java.util.zip.ZipOutputStream
 
 class RepositoryTest {
     private val password = "Testpasswort-2026".toCharArray()
-    private val jpeg = byteArrayOf(0xff.toByte(), 0xd8.toByte(), 0xff.toByte(), 0xd9.toByte())
+    private val jpeg = ByteArray(24 * 1024).also { java.util.Random(42).nextBytes(it); it[0] = 0xff.toByte(); it[1] = 0xd8.toByte() }
     private fun data(count: Int): Data = Data(work = WorkData(guides = (0 until count).chunked(100).map { ids -> Guide(title = "Anleitung", steps = ids.map { GuideStep(title = "Bild $it", body = "", image = Base64.getEncoder().encodeToString(jpeg)) }) }))
     @Test fun fiveHundredEncryptedImagesRoundTripWithoutInlineMetadata() {
         val root = Files.createTempDirectory("werklog").toFile(); val other = Files.createTempDirectory("restore").toFile()
@@ -20,6 +20,7 @@ class RepositoryTest {
             assertEquals(500, imageCount(normalized.work)); assertTrue(imageValues(normalized).all(::isImageRef))
             assertTrue(encode(normalized).size < 200000)
             val archive = File(root, "backup"); archive.outputStream().use(repo::export)
+            assertTrue(archive.length() > 8L * 1024 * 1024)
             val restoredRepo = LocalRepository(other); val restored = restoredRepo.restore(archive, password)
             assertEquals(normalized, restored.third)
             imageValues(restored.third).forEach { assertArrayEquals(jpeg, restoredRepo.image(it, restored.second)) }

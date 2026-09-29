@@ -23,7 +23,7 @@ import java.util.Base64
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
 
-private fun decodeCamera(file: File, maximum: Int): Bitmap {
+internal fun decodeCamera(file: File, maximum: Int): Bitmap {
     val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }; BitmapFactory.decodeFile(file.path, bounds)
     require(bounds.outWidth in 1..30000 && bounds.outHeight in 1..30000)
     val options = BitmapFactory.Options(); var sample = 1
@@ -72,8 +72,11 @@ suspend fun recognizeMeter(file: File): String {
     }
 }
 val LocalImageLoader = staticCompositionLocalOf<suspend (String) -> ByteArray> { { java.util.Base64.getDecoder().decode(it) } }
-@Composable internal fun StoredPhoto(encoded: String) {
+@Composable internal fun StoredPhoto(encoded: String, initiallyOpen: Boolean = false) {
     if (encoded.isEmpty()) return
+    var expanded by remember(encoded) { mutableStateOf(initiallyOpen) }
+    TextButton(onClick = { expanded = !expanded }) { Text(if (expanded) "Bild verbergen" else "Bild anzeigen") }
+    if (!expanded) return
     val loader = LocalImageLoader.current
     val bitmap by produceState<Bitmap?>(null, encoded) {
         value = runCatching {
@@ -88,21 +91,32 @@ val LocalImageLoader = staticCompositionLocalOf<suspend (String) -> ByteArray> {
     }
     bitmap?.let { Image(it.asImageBitmap(), "Hinterlegtes Bild", modifier = Modifier.fillMaxWidth().heightIn(max = 240.dp)) }
 }
-@Composable internal fun PhotoReview(file: File, target: PhotoTarget, data: Data, busy: Boolean, close: () -> Unit, save: (Data) -> Unit) {
+@Composable internal fun PhotoReview(file: File, target: PhotoTarget, data: Data, busy: Boolean, close: () -> Unit, openAsset: (String) -> Unit, save: (Data) -> Unit) {
     var result by remember { mutableStateOf<String?>(null) }; var error by remember { mutableStateOf<String?>(null) }
     var value by remember { mutableStateOf("") }; var confirmed by remember { mutableStateOf(false) }
     val meters = data.work.meters
     var meterId by remember { mutableStateOf(target.id) }
     val meter = meters.find { it.id == meterId }
     LaunchedEffect(file.path) {
-        try { result = if (target.kind == "meter") recognizeMeter(file) else compactPhoto(file) }
+        try { result = when (target.kind) { "meter" -> recognizeMeter(file); "asset" -> readAssetCode(file); else -> compactPhoto(file) } }
         catch (_: Exception) { error = "Foto konnte nicht verarbeitet werden. Bitte erneut aufnehmen oder den Zählerstand manuell eingeben." }
     }
     DisposableEffect(file.path) { onDispose { file.delete() } }
+    if (target.kind == "asset") {
+        val asset = result?.let { matchAssetCode(data, it) }
+        Form("Anlage erkennen", asset != null && !busy, close, { asset?.let { openAsset(it.id) } }, confirmLabel = "Anlagenakte öffnen") {
+            if (result == null && error == null) LinearProgressIndicator(Modifier.fillMaxWidth())
+            Text(asset?.name ?: if (result != null) "Kein eindeutiger Treffer. Kennzeichen prüfen oder Anlage zuerst importieren." else "Code wird lokal gelesen …")
+            error?.let { Text(it, color = Amber) }
+        }
+        return
+    }
+    val previous = meter?.let { m -> data.readings.filter { it.meterId == m.id }.maxByOrNull { it.created } }
+    val warning = meter?.let { m -> number(value)?.let { meterWarning(m, previous, it, false) } }
     val valid = if (target.kind == "meter") meter != null && number(value)?.let { it >= 0 } == true && confirmed else result != null
     Form(if (target.kind == "meter") "Zählerstand prüfen" else "Verkleinertes Bild", valid && !busy, close, {
         try {
-        if (target.kind == "meter" && meter != null) save(data.copy(readings = data.readings + Reading(assetId = meter.assetId, label = meter.name, value = number(value)!!, unit = meter.unit, note = "Fotoerkennung / manuell bestätigt", meterId = meter.id)))
+        if (target.kind == "meter" && meter != null) save(data.copy(readings = data.readings + Reading(assetId = meter.assetId, label = meter.name, value = number(value)!!, unit = meter.unit, note = "Fotoerkennung / manuell bestätigt" + (warning?.let { " · Auffälligkeit bestätigt: $it" } ?: ""), meterId = meter.id), work = data.work.copy(lastMeter = meter.id)))
         else result?.let { save(attachImage(data, target, it)) }
         close()
         } catch (_: Exception) { error = "Bildlimit erreicht oder Ziel nicht mehr vorhanden. Bitte ein altes Bild entfernen und erneut versuchen." }
@@ -116,11 +130,12 @@ val LocalImageLoader = staticCompositionLocalOf<suspend (String) -> ByteArray> {
                 Choices(meterCandidates(recognized), value) { value = it; confirmed = false }
                 if (meterCandidates(recognized).isEmpty()) Hint("Keine eindeutige Zahl erkannt. Wert bitte selbst eintragen.")
             }
+            previous?.let { Text("Vorher: ${it.value} ${it.unit}") }; warning?.let { Text(it, color = Amber) }
             Field(value, { value = it; confirmed = false }, "Bestätigter Zählerstand (${meter?.unit ?: "Einheit"})", numeric = true)
             Row { Checkbox(confirmed, { confirmed = it }); Text("Zähler, Einheit und Nachkommastellen am Original geprüft", modifier = Modifier.weight(1f).padding(top = 12.dp)) }
             Hint("Das Zählerfoto wird nicht gespeichert. Nur der bestätigte Zahlenwert kommt ins Protokoll.")
         } else {
-            result?.let { StoredPhoto(it); Hint("JPEG · höchstens 512 KiB · wird nur verschlüsselt gespeichert.") }
+            result?.let { StoredPhoto(it, true); Hint("JPEG · höchstens 512 KiB · wird nur verschlüsselt gespeichert.") }
         }
     }
 }

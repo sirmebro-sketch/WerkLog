@@ -14,13 +14,14 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
-@Composable internal fun ExportAssetDialog(data: Data, asset: Asset, info: AssetInfo?, close: () -> Unit, share: (ByteArray) -> Unit) {
+@Composable internal fun ExportAssetDialog(data: Data, asset: Asset, info: AssetInfo?, close: () -> Unit, share: (java.io.File) -> Unit) {
     var history by remember { mutableStateOf(false) }; var credentials by remember { mutableStateOf(false) }
     var working by remember { mutableStateOf(false) }; var error by remember { mutableStateOf<String?>(null) }
-    var code by remember { mutableStateOf<String?>(null) }; var encrypted by remember { mutableStateOf<ByteArray?>(null) }
+    var code by remember { mutableStateOf<String?>(null) }; var encrypted by remember { mutableStateOf<java.io.File?>(null) }
     var noted by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
     val loadImage = LocalImageLoader.current
+    val context = androidx.compose.ui.platform.LocalContext.current
     val selection = assetPackage(data, asset.id, credentials, history, info?.id)
     AlertDialog(onDismissRequest = { if (!working) close() }, title = { Text(if (code == null) "Verschlüsselt weitergeben" else "Dein Freigabecode") },
         text = { Column(Modifier.heightIn(max = 480.dp).verticalScroll(rememberScrollState())) {
@@ -46,7 +47,8 @@ import kotlinx.coroutines.withContext
             if (code == null) TextButton(enabled = !working, onClick = {
                 working = true; error = null
                 scope.launch {
-                    try { val generated = Exchange.newCode(); val bytes = withContext(Dispatchers.Default) { Exchange.encrypt(hydrateImages(selection, loadImage), generated) }; encrypted = bytes; code = generated }
+                    try { val generated = Exchange.newCode(); val file = java.io.File(java.io.File(context.cacheDir, "shares").also { it.mkdirs() }, "WerkLog-${newId()}.werkshare")
+                        withContext(Dispatchers.IO) { ShareArchive.create(selection, generated, loadImage, file, context.cacheDir) }; encrypted = file; code = generated }
                     catch (_: Exception) { error = "Freigabe konnte nicht erstellt werden. Datenmenge prüfen." }
                     finally { working = false }
                 }
@@ -55,8 +57,13 @@ import kotlinx.coroutines.withContext
         }, dismissButton = { TextButton(onClick = close, enabled = !working) { Text("Abbrechen") } })
 }
 
-@Composable internal fun ImportAssetDialog(bytes: ByteArray, busy: Boolean, close: () -> Unit, save: (Data) -> Unit) {
-    var code by remember { mutableStateOf("") }; var incoming by remember { mutableStateOf<Data?>(null) }
+@Composable internal fun ImportAssetDialog(file: java.io.File, current: Data, busy: Boolean, close: () -> Unit, save: (OpenShare, String?, Boolean) -> Unit) {
+    var code by remember { mutableStateOf("") }; var opened by remember { mutableStateOf<OpenShare?>(null) }
+    val incoming = opened?.data
+    var target by remember { mutableStateOf("") }; var replace by remember { mutableStateOf(false) }
+    var handedOff by remember { mutableStateOf(false) }
+    val context = androidx.compose.ui.platform.LocalContext.current
+    DisposableEffect(Unit) { onDispose { if (!handedOff) opened?.close() } }
     var error by remember { mutableStateOf<String?>(null) }; var working by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
     AlertDialog(onDismissRequest = { if (!working) close() }, title = { Text("Anlagenfreigabe importieren") },
@@ -71,7 +78,12 @@ import kotlinx.coroutines.withContext
                 Text(a.name, fontSize = 23.sp, fontWeight = FontWeight.Bold)
                 Text("${a.trade} · ${a.location}")
                 Text("${preview.infos.size} Wissenseinträge · ${preview.entries.size} Vorgänge · ${preview.readings.size} Messwerte · ${preview.credentials.size} Zugänge · ${preview.work.guides.size} Anleitungen")
-                Hint("Importiert als neue Anlagenkopie. Bestehende Daten werden nicht überschrieben. Herkunft und Richtigkeit des Inhalts bitte selbst prüfen.")
+                Picker("Importziel", listOf("" to "Neue Anlagenkopie") + current.assets.map { it.id to it.name }, target) { target = it; replace = false }
+                if (target.isNotEmpty()) {
+                    Hint("Vorhandene Anlagen-Stammdaten bleiben lokal. Neue Inhalte werden ergänzt. Wiederholte Importe derselben IDs erzeugen keine Duplikate.")
+                    Row { Checkbox(replace, { replace = it }); Text("Auch bereits zugeordnete Inhalte durch diese Version ersetzen") }
+                    if (replace) Text("Ersetzt auch lokal bearbeitete Inhalte mit gleicher Herkunft. Es werden keine fehlenden Inhalte gelöscht.", color = Amber)
+                } else Hint("Neue Anlagenkopie mit eigener Identität. Herkunft und Richtigkeit bitte prüfen.")
                 listOf("Hersteller" to a.manufacturer, "Typ" to a.model, "Seriennummer" to a.serial,
                     "Servicekontakt" to a.contact, "Ersatzteile" to a.spareParts, "Wartung" to a.nextService, "Hinweise" to a.note).forEach { (label, value) ->
                     if (value.isNotBlank()) Text("$label: $value", modifier = Modifier.padding(top = 8.dp))
@@ -79,19 +91,19 @@ import kotlinx.coroutines.withContext
                 preview.infos.forEach { Text(it.title, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 12.dp)); Text(it.body) }
                 preview.entries.forEach { Text("${it.status} · ${it.title}", fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 12.dp)); Text(it.note) }
                 preview.readings.forEach { Text("${it.label}: ${it.value} ${it.unit} · ${stamp(it.created)}", modifier = Modifier.padding(top = 8.dp)) }
-                preview.work.guides.forEach { g -> Text("Anleitung: ${g.title}", fontWeight = FontWeight.Bold); g.steps.forEachIndexed { index, s -> Text("${index + 1}. ${s.title}"); Text(s.body); StoredPhoto(s.image) } }
+                preview.work.guides.forEach { g -> Text("Anleitung: ${g.title}", fontWeight = FontWeight.Bold); g.steps.forEachIndexed { index, s -> Text("${index + 1}. ${s.title}"); Text(s.body); CompositionLocalProvider(LocalImageLoader provides { value -> withContext(Dispatchers.IO) { opened!!.image(value) } }) { StoredPhoto(s.image) } } }
                 preview.credentials.forEach { Text("Zugang: ${it.title} (Passwort verborgen)", color = Amber, modifier = Modifier.padding(top = 8.dp)) }
             }
             error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
         } },
         confirmButton = { TextButton(enabled = !busy && !working && (incoming != null || code.isNotBlank()), onClick = {
             val ready = incoming
-            if (ready != null) { save(ready); close() }
+            if (ready != null) { handedOff = true; save(opened!!, target.takeIf { it.isNotEmpty() }, replace); close() }
             else { working = true; error = null; val submittedCode = code; code = ""
-                scope.launch { try { incoming = withContext(Dispatchers.Default) { Exchange.decrypt(bytes, submittedCode) } }
+                scope.launch { try { opened = withContext(Dispatchers.IO) { ShareArchive.open(file, submittedCode, context.cacheDir) } }
                     catch (_: Exception) { error = "Code falsch, Datei beschädigt oder Format nicht unterstützt. Es wurde nichts importiert." }
                     finally { working = false } }
             }
-        }) { Text(if (incoming == null) "Entschlüsseln & prüfen" else "Als neue Anlage importieren") } },
+        }) { Text(if (incoming == null) "Entschlüsseln & prüfen" else if (target.isEmpty()) "Als neue Anlage importieren" else "In Anlage übernehmen") } },
         dismissButton = { TextButton(onClick = close, enabled = !working) { Text("Abbrechen") } })
 }

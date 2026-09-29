@@ -53,3 +53,12 @@ val starterTemplates = listOf(
     EntryTemplate(id = "pump", name = "Pumpe / Antrieb", title = "Kontrolle Pumpe / Antrieb", body = "Beobachtung:\nGeräusch / Schwingung:\nDichtheit:\nMesswerte:\nMaßnahme:\nNächster Schritt:", trade = "Alle"),
     EntryTemplate(id = "water", name = "Wasseraufbereitung", title = "Kontrolle Wasseraufbereitung", body = "Anlagenteil:\nBetriebszustand:\nMesswerte / Einheit:\nVerbrauchsmaterial:\nAuffälligkeit:\nMaßnahme:", trade = "Wasser"),
     EntryTemplate(id = "electric", name = "Elektrisches Betriebsmittel", title = "Befund Betriebsmittel", body = "Kennzeichnung:\nFehlerbild:\nDokumentierter Befund:\nErsetztes Teil / Artikelnummer:\nPrüfprotokoll-Ablage:\nWeitere Arbeit:", trade = "Alle"))
+
+fun removeAsset(d: Data, id: String): Data = d.copy(
+    assets = d.assets.filterNot { it.id == id }.map { if (it.parentId == id) it.copy(parentId = "") else it },
+    entries = d.entries.filterNot { it.assetId == id }, readings = d.readings.filterNot { it.assetId == id },
+    credentials = d.credentials.filterNot { it.assetId == id }, infos = d.infos.filterNot { it.assetId == id },
+    work = d.work.copy(meters = d.work.meters.filterNot { it.assetId == id },
+        appointments = d.work.appointments.map { if (it.assetId == id) it.copy(assetId = "") else it },
+        guides = d.work.guides.map { if (it.assetId == id) it.copy(assetId = "") else it },
+        orders = d.work.orders.map { o -> o.copy(items = o.items.map { if (it.assetId == id) it.copy(assetId = "") else it }) }))
