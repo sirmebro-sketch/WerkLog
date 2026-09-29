@@ -22,11 +22,14 @@ class WorkModel(app: Application) : AndroidViewModel(app) {
     var busy by mutableStateOf(false); private set
     var error by mutableStateOf<String?>(null)
     var session by mutableStateOf(0); private set
+    var offerBiometric by mutableStateOf(false); private set
+    fun dismissBiometricOffer() { offerBiometric = false }
     fun lock() { generation++; key?.fill(0); key = null; salt = null; data = null; session++ }
     fun unlock(password: CharArray, backup: File? = null) {
         if (busy) { password.fill('\u0000'); return }
         busy = true; error = null
         val attempt = generation
+        val creating = !exists && backup == null
         viewModelScope.launch {
             var derived: ByteArray? = null
             try {
@@ -49,6 +52,7 @@ class WorkModel(app: Application) : AndroidViewModel(app) {
                         salt = result.first; key = result.second; derived = null
                         val raw = Vault.decrypt(repository.envelope(), result.second)
                         data = try { decode(raw) } finally { raw.fill(0) }; exists = true; session++
+                        if (creating) offerBiometric = true
                         data?.let { runCatching { Reminders.update(getApplication(), it) } }
                     }
                 }

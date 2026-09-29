@@ -67,6 +67,7 @@ fun validateWork(w: WorkData, assetIds: Set<String>) {
     for (ids in listOf(w.meters.map { it.id }, w.appointments.map { it.id }, w.guides.map { it.id }, w.orders.map { it.id }, w.guides.flatMap { it.steps.map { s -> s.id } }, w.orders.flatMap { it.items.map { x -> x.id } })) require(ids.size == ids.distinct().size)
 }
 fun attachImage(data: Data, target: PhotoTarget, image: String): Data {
+    if (target.kind == "profile") return data.copy(profile = data.profile.copy(image = image).also(::validateProfile))
     val w = data.work
     val next = when (target.kind) {
         "guide" -> { require(w.guides.any { it.steps.any { s -> s.id == target.id } }); w.copy(guides = w.guides.map { g -> g.copy(revision = if (g.steps.any { it.id == target.id }) g.revision + 1 else g.revision, checked = if (g.steps.any { it.id == target.id }) "" else g.checked, steps = g.steps.map { if (it.id == target.id) it.copy(image = image) else it }) }) }

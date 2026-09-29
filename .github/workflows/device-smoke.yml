@@ -41,7 +41,7 @@ jobs:
         if: success()
         with:
           name: Android-Layout
-          path: app/build/outputs/connected_android_test_additional_output/**/betrieb.png
+          path: app/build/outputs/connected_android_test_additional_output/**/*.png
           if-no-files-found: error
           retention-days: 3
       - uses: actions/upload-artifact@v4

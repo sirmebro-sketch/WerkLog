@@ -1,6 +1,13 @@
-# Stand 0.4.0 — Umsetzung und Grenzen
+# Stand 0.4.1 — Umsetzung und Grenzen
 
-## Eingebaut und automatisiert geprüft
+## Ergänzungen 0.4.1
+
+- Kompakte Führung reserviert Platz oberhalb der Navigation, ohne die Seite abzudunkeln; Zurück/Weiter/Überspringen.
+- Nach erstmaligem Erstellen des Passworts freiwilliges Fingerabdruck-Angebot vor der Führung; Android prüft die verfügbare starke Biometrie.
+- Lokales Profil mit Foto und optionalen dienstlichen Angaben; bearbeiten, Foto entfernen, Profil löschen. Keine automatische Weitergabe.
+- Eigene Kraftwerk-Vektorgrafik für den mittleren Betrieb-Knopf.
+
+## Vorherige automatisierte Abnahme 0.4.0
 
 Android-Build (40 JVM-Tests, Lint, APK-Netzwerkprüfung) und Android-15-Bedienablauf erfolgreich am 29.09.2026. Details und noch offene Gerätetests: [DEVICE-TEST.md](DEVICE-TEST.md).
 

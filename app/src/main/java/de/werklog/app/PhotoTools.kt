@@ -38,15 +38,15 @@ internal fun decodeCamera(file: File, maximum: Int): Bitmap {
     if (ratio >= 1) return rotated
     return Bitmap.createScaledBitmap(rotated, (rotated.width * ratio).toInt().coerceAtLeast(1), (rotated.height * ratio).toInt().coerceAtLeast(1), true).also { if (it !== rotated) rotated.recycle() }
 }
-suspend fun compactPhoto(file: File): String = withContext(Dispatchers.IO) {
+suspend fun compactPhoto(file: File, maximum: Int = 1920, maxBytes: Int = MAX_IMAGE_BYTES): String = withContext(Dispatchers.IO) {
     var bitmap: Bitmap? = null
     try {
-        bitmap = decodeCamera(file, 1920)
+        bitmap = decodeCamera(file, maximum)
         var result: ByteArray
         var quality = 78
         while (true) {
             val out = ByteArrayOutputStream(); bitmap!!.compress(Bitmap.CompressFormat.JPEG, quality, out); result = out.toByteArray()
-            if (result.size <= MAX_IMAGE_BYTES) break
+            if (result.size <= maxBytes) break
             if (quality > 38) quality -= 10 else {
                 val old = bitmap!!; bitmap = Bitmap.createScaledBitmap(old, (old.width * .75).toInt().coerceAtLeast(1), (old.height * .75).toInt().coerceAtLeast(1), true)
                 if (old !== bitmap) old.recycle()
@@ -99,7 +99,7 @@ val LocalImageLoader = staticCompositionLocalOf<suspend (String) -> ByteArray> {
     var meterId by remember { mutableStateOf(target.id) }
     val meter = meters.find { it.id == meterId }
     LaunchedEffect(file.path) {
-        try { result = when (target.kind) { "meter" -> recognizeMeter(file); "asset" -> readAssetCode(file); else -> compactPhoto(file) } }
+        try { result = when (target.kind) { "meter" -> recognizeMeter(file); "asset" -> readAssetCode(file); "profile" -> compactPhoto(file, 384, MAX_PROFILE_IMAGE_BYTES); else -> compactPhoto(file) } }
         catch (_: Exception) { error = "Foto konnte nicht verarbeitet werden. Bitte erneut aufnehmen oder den Zählerstand manuell eingeben." }
     }
     DisposableEffect(file.path) { onDispose { file.delete() } }

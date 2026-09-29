@@ -58,6 +58,10 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
     private val notifications = registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted -> if (!granted) model.error = "Benachrichtigungen sind deaktiviert. Termine bleiben im lokalen Kalender sichtbar." }
     fun enableReminders() { if (android.os.Build.VERSION.SDK_INT >= 33) notifications.launch(android.Manifest.permission.POST_NOTIFICATIONS) }
     fun toggleBiometric() { if (biometric.enabled()) { biometric.disable(); model.error = "Biometrie deaktiviert." } else model.biometricKey()?.let { biometric.authenticate(it, { model.error = "Biometrie aktiviert. Für Sicherungen bleibt dein Passwort erforderlich." }, { model.error = it }) } }
+    fun enableBiometric(done: () -> Unit) {
+        val key = model.biometricKey() ?: run { done(); return }
+        biometric.authenticate(key, { done() }, { model.error = it; done() })
+    }
     fun biometricAvailable() = biometric.enabled()
     fun unlockBiometric() = biometric.authenticate(result = { it?.let(model::unlockKey) }, error = { model.error = it })
     private val model: WorkModel by viewModels()
@@ -283,20 +287,36 @@ private fun java.io.InputStream.readBytesLimited(): ByteArray {
     val tourPrefs = context.getSharedPreferences("onboarding", 0)
     var tour by remember { mutableIntStateOf(if (tourPrefs.getBoolean("done-v1", false)) -1 else 0) }
     BackHandler(enabled = page != 0 && dialog == null && selectedAssetId == null && tool == null) { page = if (page in 1..3) 4 else 0 }
+    val activity = context as MainActivity
+    var biometricPromptRunning by remember { mutableStateOf(false) }
+    val tourVisible = tour >= 0 && !model.offerBiometric && !biometricPromptRunning && model.error == null
+    val tourSteps = listOf(
+        Triple(0, "Heute", "Hier siehst du Termine und offene Arbeiten für deinen Tag."),
+        Triple(4, "Betrieb", "Die Kacheln öffnen Anlagen, Zähler und deine weiteren Werkzeuge."),
+        Triple(1, "Anlagen", "Öffne eine Anlage für Wissen, Zugänge und Verlauf."),
+        Triple(5, "Einstellung", "Hier findest du Profil, Passwort, Fingerabdruck und Sicherungen."))
+    fun finishTour() { tour = -1; page = 0; tourPrefs.edit().putBoolean("done-v1", true).apply() }
+    LaunchedEffect(tour, tourVisible) { if (tourVisible) { page = tourSteps[tour].first; tool = null; selectedAssetId = null } }
+    BackHandler(enabled = tourVisible) { finishTour() }
     Scaffold(containerColor = WerkColors.background, topBar = {
             Row(Modifier.fillMaxWidth().statusBarsPadding().padding(horizontal = 20.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) { Text("WERKLOG  /  LOKAL", color = Mint, fontSize = 11.sp, fontWeight = FontWeight.Bold); Text(if (page == 4 && tool != null) tool!! else titles[page], fontSize = 30.sp, fontWeight = FontWeight.Bold) }
                 IconButton(onClick = { model.lock() }) { Icon(Icons.Outlined.Lock, "App sperren", tint = Mint) }
             }
     }, bottomBar = {
+        Column {
+        if (tourVisible) TourStrip(tour, tourSteps[tour].second, tourSteps[tour].third,
+            back = { if (tour > 0) tour-- }, skip = { finishTour() },
+            next = { if (tour == tourSteps.lastIndex) finishTour() else tour++ })
         NavigationBar(containerColor = WerkColors.surface) {
             NavigationBarItem(selected = page == 0, onClick = { page = 0; tool = null }, icon = { Icon(Icons.Outlined.Today, "Heute") }, label = { Text("Heute") })
             NavigationBarItem(selected = page in 1..4, onClick = { page = 4; tool = null; selectedAssetId = null }, icon = {
                 Surface(shape = androidx.compose.foundation.shape.CircleShape, color = Mint, modifier = Modifier.size(58.dp)) {
-                    Box(contentAlignment = Alignment.Center) { Icon(Icons.Outlined.PrecisionManufacturing, "Betrieb", tint = WerkColors.background, modifier = Modifier.size(32.dp)) }
+                    Box(contentAlignment = Alignment.Center) { Icon(PowerPlantIcon, "Betrieb", tint = WerkColors.background, modifier = Modifier.size(32.dp)) }
                 }
             }, label = { Text("Betrieb", fontWeight = FontWeight.Bold) })
             NavigationBarItem(selected = page == 5, onClick = { page = 5; tool = null }, icon = { Icon(Icons.Outlined.Settings, "Einstellung") }, label = { Text("Einstellung") })
+        }
         }
     }) { padding ->
         val scroll = rememberScrollState()
@@ -306,7 +326,7 @@ private fun java.io.InputStream.readBytesLimited(): ByteArray {
             when (page) {
                 0 -> {
                     Panel {
-                        Text("Alles im Blick.", fontSize = 26.sp, fontWeight = FontWeight.Bold)
+                        Text(if (d.profile.name.isBlank()) "Alles im Blick." else "Hallo, ${d.profile.name}.", fontSize = 26.sp, fontWeight = FontWeight.Bold)
                         Text(java.time.LocalDate.now().format(DateTimeFormatter.ofPattern("EEEE, dd. MMMM", java.util.Locale.GERMAN)), color = Muted)
                         Spacer(Modifier.height(22.dp))
                         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
@@ -417,6 +437,7 @@ private fun java.io.InputStream.readBytesLimited(): ByteArray {
                     } }
                 }
                 5 -> {
+                    ProfilePanel(d, model.busy, { model.update(it) }, onPhoto)
                     Panel { Text("Dein Datentresor", fontSize = 23.sp, fontWeight = FontWeight.Bold)
                         Text("Lokal verschlüsselt · Ohne Internetberechtigung", color = Mint)
                         Text("${imageCount(d.work)} / $MAX_IMAGES Bilder · ${model.storageBytes() / (1024 * 1024)} MiB belegt")
@@ -427,29 +448,26 @@ private fun java.io.InputStream.readBytesLimited(): ByteArray {
                     Button(onClick = onExport, enabled = !model.busy, modifier = Modifier.fillMaxWidth()) { Text("Verschlüsselte Sicherung speichern") }
                     Hint("Wähle einen lokalen Ordner, wenn die Sicherung auf dem Gerät bleiben soll. Der Android-Dateidialog kann auch Cloud-Anbieter anzeigen. Wiederherstellen ist am Sperrbildschirm möglich.")
                     OutlinedButton(onClick = onImport, enabled = !model.busy, modifier = Modifier.fillMaxWidth()) { Text("Anlagenfreigabe eines Kollegen importieren") }
-                    Hint("Öffnet eine .werkshare-Datei. Nach der Dateiauswahl die App erneut entsperren und den separat erhaltenen Code eingeben.")
+                    Hint("Öffnet eine .werkshare-Datei. Datei auswählen und den separat erhaltenen Code eingeben. Kurze Wechsel zur Code-Nachricht sind bis zu zwei Minuten möglich.")
                     OutlinedButton(onClick = { mail = "WerkLog · Schichtübergabe" to handover(d) }, modifier = Modifier.fillMaxWidth()) { Text("Schichtübergabe vorbereiten") }
                     Section("Für deinen Arbeitsalltag")
                     Hint("WerkLog dokumentiert Beobachtungen und Tätigkeiten. Freigaben, Betriebsanweisungen und eure offiziellen Meldewege bleiben maßgeblich. Keine Anlagensteuerung oder Verbindung zur GLT.")
                     OutlinedButton(onClick = { dialog = "password" }, enabled = !model.busy, modifier = Modifier.fillMaxWidth()) { Text("App-Passwort ändern") }
                     OutlinedButton(onClick = { tour = 0; page = 0 }, modifier = Modifier.fillMaxWidth()) { Text("Kurze App-Führung starten") }
-                    Text("WERKLOG 0.4.0 · KOTLIN / ANDROID", color = Muted, fontSize = 11.sp)
+                    Text("WERKLOG 0.4.1 · KOTLIN / ANDROID", color = Muted, fontSize = 11.sp)
                 }
             }
             Spacer(Modifier.height(24.dp))
         }
     }
-    if (tour >= 0) {
-        val steps = listOf(
-            Triple(0, "Heute", "Datum, Wochentag, offene Arbeiten, Wartungen und anstehende Termine auf einen Blick."),
-            Triple(4, "Betrieb", "Der mittlere Knopf führt zu Anlagen, Journal, Zählern, Rundgängen und weiteren Werkzeugen."),
-            Triple(1, "Deine Anlagen", "Lege eine Anlage an. In ihrer Akte findest du Wissen, Zugangsdaten und Verlauf. Hier kannst du sie auch bearbeiten oder löschen."),
-            Triple(5, "Deine Einstellungen", "Erstelle regelmäßig verschlüsselte Sicherungen. Hier änderst du dein Passwort und aktivierst Fingerabdruck-Entsperren. Ohne Passwort lässt sich eine Sicherung nicht öffnen."))
-        LaunchedEffect(tour) { page = steps[tour].first; tool = null; selectedAssetId = null }
-        AlertDialog(onDismissRequest = { tour = -1; page = 0; tourPrefs.edit().putBoolean("done-v1", true).apply() }, title = { Text("${tour + 1}/4 · ${steps[tour].second}") }, text = { Text(steps[tour].third) },
-            confirmButton = { TextButton(onClick = { if (tour == steps.lastIndex) { tour = -1; page = 0; tourPrefs.edit().putBoolean("done-v1", true).apply() } else tour++ }) { Text(if (tour == steps.lastIndex) "Loslegen" else "Weiter") } },
-            dismissButton = { TextButton(onClick = { tour = -1; page = 0; tourPrefs.edit().putBoolean("done-v1", true).apply() }) { Text("Überspringen") } })
-    }
+    if (model.offerBiometric) AlertDialog(onDismissRequest = model::dismissBiometricOffer,
+        title = { Text("Mit Fingerabdruck entsperren?") },
+        text = { Text("Auf diesem Gerät aktivieren? Dein Passwort bleibt für Sicherungen erforderlich. Du kannst das später in Einstellung ändern.") },
+        confirmButton = { TextButton(onClick = {
+            model.dismissBiometricOffer(); biometricPromptRunning = true
+            activity.enableBiometric { biometricPromptRunning = false }
+        }, enabled = !model.busy) { Text("Jetzt aktivieren") } },
+        dismissButton = { TextButton(onClick = model::dismissBiometricOffer) { Text("Später") } })
     if (dialog == "password") PasswordChangeDialog(model.busy, { dialog = null }) { old, next -> model.changePassword(old, next); dialog = null }
     if (dialog == "asset") AssetEditor(editAsset, d.assets, { dialog = null }) { a -> model.update(d.copy(assets = d.assets.filterNot { it.id == a.id } + a)); dialog = null }
     if (dialog == "entry") EntryEditor(editEntry, d.assets, d.work.templates, preselectedAssetId, { dialog = null }, { editEntry?.let { removal = "entry" to it.id }; dialog = null }, { e ->

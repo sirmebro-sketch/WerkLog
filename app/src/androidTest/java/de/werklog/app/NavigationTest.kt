@@ -21,7 +21,14 @@ class NavigationTest {
             ui.onNodeWithText("Passwort", substring = false).performTextInput("Testpasswort2026")
             ui.onNodeWithText("Passwort wiederholen").performTextInput("Testpasswort2026")
             ui.onNodeWithText("Tresor erstellen").performClick()
+            ui.waitUntil(15000) { ui.onAllNodesWithText("Später").fetchSemanticsNodes().isNotEmpty() }
+            ui.onNodeWithText("Später").performClick()
             ui.waitUntil(15000) { ui.onAllNodesWithText("Überspringen").fetchSemanticsNodes().isNotEmpty() }
+            ui.onNodeWithText("Weiter").performClick()
+            ui.onNodeWithText("Anlagen", substring = false).assertIsDisplayed()
+            ui.onRoot().captureToImage().asAndroidBitmap().let { bitmap ->
+                File(requireNotNull(InstrumentationRegistry.getArguments().getString("additionalTestOutputDir")), "fuehrung.png").apply { parentFile?.mkdirs() }.outputStream().use { bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it) }
+            }
             ui.onNodeWithText("Überspringen").performClick()
             ui.onNodeWithText("Betrieb", useUnmergedTree = true).performClick()
             ui.onRoot().captureToImage().asAndroidBitmap().let { bitmap ->
@@ -38,6 +45,12 @@ class NavigationTest {
             ui.onNodeWithText("Speichern").performClick()
             ui.waitUntil(10000) { ui.onAllNodesWithText("Prüfanlage geändert").fetchSemanticsNodes().isNotEmpty() }
             ui.onNodeWithText("Einstellung", useUnmergedTree = true).performClick()
+            ui.onNodeWithText("Profil erstellen").performScrollTo().performClick()
+            ui.onNodeWithText("Name *").performTextInput("Alex Test")
+            ui.onNodeWithText("Team / Bereich").performTextInput("Kraftwerk")
+            ui.onNodeWithText("Speichern").performClick()
+            ui.waitUntil(10000) { ui.onAllNodesWithText("Profil bearbeiten").fetchSemanticsNodes().isNotEmpty() }
+            ui.onNodeWithText("Alex Test", substring = false).assertExists()
             ui.onNodeWithText("App-Passwort ändern").performScrollTo().performClick()
             ui.onNodeWithText("Aktuelles Passwort").performTextInput("Testpasswort2026")
             ui.onNodeWithText("Neues Passwort (mind. 10 Zeichen)").performTextInput("NeuesPasswort2026")
@@ -49,7 +62,7 @@ class NavigationTest {
             ui.waitUntil(10000) { ui.onAllNodesWithText("Passwort", substring = false).fetchSemanticsNodes().isNotEmpty() }
             ui.onNodeWithText("Passwort", substring = false).performTextInput("NeuesPasswort2026")
             ui.onNodeWithText("Entsperren", substring = false).performClick()
-            ui.waitUntil(15000) { ui.onAllNodesWithText("Alles im Blick.").fetchSemanticsNodes().isNotEmpty() }
+            ui.waitUntil(15000) { ui.onAllNodesWithText("Hallo, Alex Test.").fetchSemanticsNodes().isNotEmpty() }
         }
     }
 }

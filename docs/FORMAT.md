@@ -1,6 +1,6 @@
 # Offline-Formate, Version 0.4
 
-Alle Integer-Felder im JSON; Text UTF-8. Datenschema 4. Decoder akzeptiert Schema 1–4. Die kryptografischen Testvektoren unter app/src/test/resources/interop.json und apple/WerkLogCore/Tests sind synthetisch und identisch.
+Alle Integer-Felder im JSON; Text UTF-8. Datenschema 5. Decoder akzeptiert Schema 1–5. Schema 5 ergänzt das optionale lokale Profil (Name, Funktion, Team, Betrieb, Diensttelefon, E-Mail, JPEG-Profilfoto als Base64 bis 96 KiB). Das Profilfoto bleibt innerhalb der verschlüsselten Metadaten und belegt keinen der 500 Plätze für Arbeitsbilder. Ältere Dateien erhalten ein leeres Profil. Anlagenpakete enthalten stets ein leeres Profil; Importe bewahren das Profil des Empfängers. Die kryptografischen Testvektoren unter app/src/test/resources/interop.json und apple/WerkLogCore/Tests sind synthetisch und identisch.
 
 ## Metadaten (`data.vault`)
 

@@ -21,11 +21,12 @@ data class RoundRun(val id: String = newId(), val title: String, val results: Li
     val created: Long = System.currentTimeMillis())
 data class Data(val assets: List<Asset> = emptyList(), val entries: List<Entry> = emptyList(),
     val readings: List<Reading> = emptyList(), val rounds: List<Round> = emptyList(), val runs: List<RoundRun> = emptyList(),
-    val credentials: List<Credential> = emptyList(), val infos: List<AssetInfo> = emptyList(), val work: WorkData = WorkData())
+    val credentials: List<Credential> = emptyList(), val infos: List<AssetInfo> = emptyList(), val work: WorkData = WorkData(), val profile: LocalProfile = LocalProfile())
 fun number(text: String): Double? = text.trim().replace(',', '.').toDoubleOrNull()?.takeIf { it.isFinite() }
 private fun <T> List<T>.json(map: (T) -> JSONObject) = JSONArray().also { a -> forEach { a.put(map(it)) } }
 private fun obj(vararg pairs: Pair<String, Any>) = JSONObject().also { j -> pairs.forEach { j.put(it.first, it.second) } }
-fun encode(d: Data): ByteArray = obj("schema" to 4,
+fun encode(d: Data): ByteArray = obj("schema" to 5,
+    "profile" to profileJson(d.profile),
     "assets" to d.assets.json { obj("id" to it.id, "name" to it.name, "trade" to it.trade, "location" to it.location, "note" to it.note, "manufacturer" to it.manufacturer, "model" to it.model, "serial" to it.serial, "contact" to it.contact, "spareParts" to it.spareParts, "nextService" to it.nextService, "tag" to it.tag, "parentId" to it.parentId, "favorite" to it.favorite, "lastOpened" to it.lastOpened) },
     "entries" to d.entries.json { obj("id" to it.id, "assetId" to it.assetId, "title" to it.title, "note" to it.note, "priority" to it.priority, "status" to it.status, "created" to it.created, "updated" to it.updated, "minutes" to it.minutes) },
     "readings" to d.readings.json { obj("id" to it.id, "assetId" to it.assetId, "label" to it.label, "value" to it.value, "unit" to it.unit, "note" to it.note, "created" to it.created, "meterId" to it.meterId, "reset" to it.reset) },
@@ -39,7 +40,7 @@ private fun <T> JSONObject.list(key: String, map: (JSONObject) -> T): List<T> = 
 }
 private fun JSONObject.strings(key: String): List<String> = getJSONArray(key).let { a -> (0 until a.length()).map { a.getString(it) } }
 fun decode(bytes: ByteArray): Data {
-    val j = JSONObject(bytes.toString(Charsets.UTF_8)); val schema = j.getInt("schema"); require(schema in 1..4) { "Unbekannte Datenversion" }
+    val j = JSONObject(bytes.toString(Charsets.UTF_8)); val schema = j.getInt("schema"); require(schema in 1..5) { "Unbekannte Datenversion" }
     val d = Data(j.list("assets") { Asset(it.getString("id"), it.getString("name"), it.getString("trade"), it.getString("location"), it.getString("note"), it.optString("manufacturer"), it.optString("model"), it.optString("serial"), it.optString("contact"), it.optString("spareParts"), it.optString("nextService"), it.optString("tag"), it.optString("parentId"), it.optBoolean("favorite"), it.optLong("lastOpened")) },
         j.list("entries") { Entry(it.getString("id"), it.getString("assetId"), it.getString("title"), it.getString("note"), it.getString("priority"), it.getString("status"), it.getLong("created"), it.getLong("updated"), it.getInt("minutes")) },
         j.list("readings") { Reading(it.getString("id"), it.getString("assetId"), it.getString("label"), it.getDouble("value"), it.getString("unit"), it.getString("note"), it.getLong("created"), it.optString("meterId"), it.optBoolean("reset")) },
@@ -47,7 +48,7 @@ fun decode(bytes: ByteArray): Data {
         j.list("runs") { RoundRun(it.getString("id"), it.getString("title"), it.strings("results"), it.getString("note"), it.getLong("created")) },
         if (schema == 1) emptyList() else j.list("credentials") { Credential(it.getString("id"), it.getString("assetId"), it.getString("title"), it.getString("username"), it.getString("password"), it.getString("address"), it.getString("note"), it.getLong("updated")) },
         if (schema == 1) emptyList() else j.list("infos") { AssetInfo(it.getString("id"), it.getString("assetId"), it.getString("title"), it.getString("body"), it.getLong("updated")) },
-        if (schema < 3) WorkData() else readWork(j.getJSONObject("work")))
+        if (schema < 3) WorkData() else readWork(j.getJSONObject("work")), readProfile(j.optJSONObject("profile")))
     val ids = d.assets.map { it.id }.toSet()
     require(ids.size == d.assets.size && d.assets.all { it.name.isNotBlank() })
     require(d.entries.all { it.assetId in ids && it.status in statuses && it.priority in priorities && it.minutes >= 0 })
@@ -62,6 +63,7 @@ fun decode(bytes: ByteArray): Data {
         val visited = mutableSetOf(asset.id); var parent = asset.parentId
         while (parent.isNotEmpty()) { require(parent in ids && visited.add(parent)) { "Ungültige Anlagenhierarchie" }; parent = d.assets.single { it.id == parent }.parentId }
     }
+    validateProfile(d.profile)
     validateWork(d.work, ids)
     require(d.readings.all { r -> r.meterId.isEmpty() || d.work.meters.any { it.id == r.meterId && it.assetId == r.assetId } })
     return d
