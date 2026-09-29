@@ -48,6 +48,7 @@ object Exchange {
                 val j = JSONObject(String(raw, Charsets.UTF_8))
                 require(j.getString("format") == "WerkLog-Anlagenpaket" && j.getInt("version") == 1)
                 return decode(j.getJSONObject("data").toString().toByteArray(Charsets.UTF_8)).also {
+                    require(imageValues(it).none(::isImageRef))
                     require(it.assets.size == 1 && it.rounds.isEmpty() && it.runs.isEmpty() && it.work.orders.isEmpty() && it.work.appointments.isEmpty())
                     require(it.work.guides.all { g -> g.assetId == it.assets.single().id })
                 }
@@ -57,7 +58,7 @@ object Exchange {
 }
 fun assetPackage(data: Data, id: String, credentials: Boolean, history: Boolean, infoId: String? = null): Data {
     val asset = data.assets.single { it.id == id }
-    return Data(assets = listOf(if (infoId == null) asset else Asset(id = asset.id, name = asset.name, trade = asset.trade, location = "", note = "")),
+    return Data(assets = listOf(if (infoId == null) asset.copy(parentId = "", favorite = false, lastOpened = 0) else Asset(id = asset.id, name = asset.name, trade = asset.trade, location = "", note = "")),
         entries = if (history && infoId == null) data.entries.filter { it.assetId == id } else emptyList(),
         readings = if (history && infoId == null) data.readings.filter { it.assetId == id } else emptyList(),
         credentials = if (credentials && infoId == null) data.credentials.filter { it.assetId == id } else emptyList(),
@@ -70,12 +71,16 @@ fun assetPackage(data: Data, id: String, credentials: Boolean, history: Boolean,
 fun importPackage(current: Data, incoming: Data): Data {
     require(incoming.assets.size == 1)
     val old = incoming.assets.single(); val id = newId()
-    val meterIds = incoming.work.meters.associate { it.id to newId() }
-    return current.copy(assets = current.assets + old.copy(id = id, name = "${old.name} (Import)"),
-        entries = current.entries + incoming.entries.map { it.copy(id = newId(), assetId = id) },
-        readings = current.readings + incoming.readings.map { it.copy(id = newId(), assetId = id, meterId = if (it.meterId.isEmpty()) "" else meterIds.getValue(it.meterId)) },
-        credentials = current.credentials + incoming.credentials.map { it.copy(id = newId(), assetId = id) },
-        infos = current.infos + incoming.infos.map { it.copy(id = newId(), assetId = id) },
-        work = current.work.copy(meters = current.work.meters + incoming.work.meters.map { it.copy(id = meterIds.getValue(it.id), assetId = id) },
-            guides = current.work.guides + incoming.work.guides.map { it.copy(id = newId(), assetId = id, steps = it.steps.map { s -> s.copy(id = newId()) }) }))
+    return mergePackage(current.copy(assets = current.assets + old.copy(id = id, name = "${old.name} (Import)", parentId = "", favorite = false, lastOpened = 0)), incoming, id, false)
+}
+
+suspend fun hydrateImages(data: Data, load: suspend (String) -> ByteArray): Data {
+    val replacements = mutableMapOf<String, String>()
+    var total = 0L
+    for (ref in imageValues(data).filter(::isImageRef).distinct()) {
+        val bytes = load(ref)
+        try { total += bytes.size * 4L / 3L; require(total < Vault.MAX_BYTES - 1024 * 1024) { "Paket zu groß; einzelne Anleitungen teilen" }; replacements[ref] = java.util.Base64.getEncoder().encodeToString(bytes) }
+        finally { bytes.fill(0) }
+    }
+    return mapImages(data) { replacements[it] ?: it }
 }

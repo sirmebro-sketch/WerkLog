@@ -10,7 +10,7 @@ import javax.crypto.spec.SecretKeySpec
 
 /** File: magic (8), salt (16), IV (12), AES-GCM ciphertext with tag. */
 object Vault {
-    const val MAX_BYTES = 8 * 1024 * 1024
+    const val MAX_BYTES = 32 * 1024 * 1024
     private val magic = "WRKLOG01".toByteArray(Charsets.US_ASCII)
     private fun random(n: Int) = ByteArray(n).also { SecureRandom().nextBytes(it) }
     fun salt() = random(16)

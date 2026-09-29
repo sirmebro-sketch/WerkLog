@@ -20,6 +20,7 @@ import kotlinx.coroutines.withContext
     var code by remember { mutableStateOf<String?>(null) }; var encrypted by remember { mutableStateOf<ByteArray?>(null) }
     var noted by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
+    val loadImage = LocalImageLoader.current
     val selection = assetPackage(data, asset.id, credentials, history, info?.id)
     AlertDialog(onDismissRequest = { if (!working) close() }, title = { Text(if (code == null) "Verschlüsselt weitergeben" else "Dein Freigabecode") },
         text = { Column(Modifier.heightIn(max = 480.dp).verticalScroll(rememberScrollState())) {
@@ -45,7 +46,7 @@ import kotlinx.coroutines.withContext
             if (code == null) TextButton(enabled = !working, onClick = {
                 working = true; error = null
                 scope.launch {
-                    try { val generated = Exchange.newCode(); val bytes = withContext(Dispatchers.Default) { Exchange.encrypt(selection, generated) }; encrypted = bytes; code = generated }
+                    try { val generated = Exchange.newCode(); val bytes = withContext(Dispatchers.Default) { Exchange.encrypt(hydrateImages(selection, loadImage), generated) }; encrypted = bytes; code = generated }
                     catch (_: Exception) { error = "Freigabe konnte nicht erstellt werden. Datenmenge prüfen." }
                     finally { working = false }
                 }

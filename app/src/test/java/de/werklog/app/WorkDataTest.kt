@@ -58,7 +58,7 @@ class WorkDataTest {
     }
     @Test fun totalImageBudgetRejectsOversizedImports() {
         val jpegHeader = java.util.Base64.getEncoder().encodeToString(byteArrayOf(0xff.toByte(), 0xd8.toByte(), 0xff.toByte(), 0xd9.toByte()))
-        val w = WorkData(guides = listOf(Guide(title = "Test", steps = (1..31).map { GuideStep(title = "Schritt $it", body = "", image = jpegHeader) })))
+        val w = WorkData(guides = (1..501).chunked(100).map { ids -> Guide(title = "Test", steps = ids.map { GuideStep(title = "Schritt $it", body = "", image = jpegHeader) }) })
         assertThrows(IllegalArgumentException::class.java) { validateWork(w, emptySet()) }
     }
 

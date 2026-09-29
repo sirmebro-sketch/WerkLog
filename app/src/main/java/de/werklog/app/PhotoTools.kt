@@ -41,7 +41,7 @@ private fun decodeCamera(file: File, maximum: Int): Bitmap {
 suspend fun compactPhoto(file: File): String = withContext(Dispatchers.IO) {
     var bitmap: Bitmap? = null
     try {
-        bitmap = decodeCamera(file, 1280)
+        bitmap = decodeCamera(file, 1920)
         var result: ByteArray
         var quality = 78
         while (true) {
@@ -71,14 +71,21 @@ suspend fun recognizeMeter(file: File): String {
         } catch (e: Exception) { recognizer.close(); bitmap.recycle(); if (continuation.isActive) continuation.resumeWithException(e) }
     }
 }
+val LocalImageLoader = staticCompositionLocalOf<suspend (String) -> ByteArray> { { java.util.Base64.getDecoder().decode(it) } }
 @Composable internal fun StoredPhoto(encoded: String) {
     if (encoded.isEmpty()) return
-    val bitmap = remember(encoded) { runCatching { val bytes = Base64.getDecoder().decode(encoded)
-        require(bytes.size <= MAX_IMAGE_BYTES)
-        val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }; BitmapFactory.decodeByteArray(bytes, 0, bytes.size, bounds)
-        require(bounds.outWidth in 1..4096 && bounds.outHeight in 1..4096)
-        val options = BitmapFactory.Options().apply { inSampleSize = 2 }; BitmapFactory.decodeByteArray(bytes, 0, bytes.size, options) }.getOrNull() }
-    DisposableEffect(bitmap) { onDispose { bitmap?.recycle() } }
+    val loader = LocalImageLoader.current
+    val bitmap by produceState<Bitmap?>(null, encoded) {
+        value = runCatching {
+            val bytes = if (isImageRef(encoded)) loader(encoded) else Base64.getDecoder().decode(encoded)
+            try { withContext(Dispatchers.Default) {
+                require(bytes.size <= MAX_IMAGE_BYTES)
+                val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }; BitmapFactory.decodeByteArray(bytes, 0, bytes.size, bounds)
+                require(bounds.outWidth in 1..4096 && bounds.outHeight in 1..4096)
+                BitmapFactory.decodeByteArray(bytes, 0, bytes.size, BitmapFactory.Options().apply { inSampleSize = 2 })
+            } } finally { bytes.fill(0) }
+        }.getOrNull()
+    }
     bitmap?.let { Image(it.asImageBitmap(), "Hinterlegtes Bild", modifier = Modifier.fillMaxWidth().heightIn(max = 240.dp)) }
 }
 @Composable internal fun PhotoReview(file: File, target: PhotoTarget, data: Data, busy: Boolean, close: () -> Unit, save: (Data) -> Unit) {
@@ -113,7 +120,7 @@ suspend fun recognizeMeter(file: File): String {
             Row { Checkbox(confirmed, { confirmed = it }); Text("Zähler, Einheit und Nachkommastellen am Original geprüft", modifier = Modifier.weight(1f).padding(top = 12.dp)) }
             Hint("Das Zählerfoto wird nicht gespeichert. Nur der bestätigte Zahlenwert kommt ins Protokoll.")
         } else {
-            result?.let { StoredPhoto(it); Hint("JPEG · höchstens 160 KB · wird nur verschlüsselt gespeichert.") }
+            result?.let { StoredPhoto(it); Hint("JPEG · höchstens 512 KiB · wird nur verschlüsselt gespeichert.") }
         }
     }
 }

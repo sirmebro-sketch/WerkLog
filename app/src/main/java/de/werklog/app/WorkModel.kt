@@ -13,21 +13,17 @@ import kotlinx.coroutines.withContext
 import java.io.File
 
 class WorkModel(app: Application) : AndroidViewModel(app) {
-    private val file = AtomicFile(File(app.filesDir, "werklog.vault"))
+    private val repository = LocalRepository(app.filesDir)
     private var key: ByteArray? = null
     private var salt: ByteArray? = null
     private var generation = 0
     var data by mutableStateOf<Data?>(null); private set
-    var exists by mutableStateOf(file.baseFile.exists()); private set
+    var exists by mutableStateOf(repository.exists()); private set
     var busy by mutableStateOf(false); private set
     var error by mutableStateOf<String?>(null)
     var session by mutableStateOf(0); private set
     fun lock() { generation++; key?.fill(0); key = null; salt = null; data = null; session++ }
-    private fun write(bytes: ByteArray) {
-        val out = file.startWrite()
-        try { out.write(bytes); file.finishWrite(out) } catch (e: Exception) { file.failWrite(out); throw e }
-    }
-    fun unlock(password: CharArray, backup: ByteArray? = null) {
+    fun unlock(password: CharArray, backup: File? = null) {
         if (busy) { password.fill('\u0000'); return }
         busy = true; error = null
         val attempt = generation
@@ -35,26 +31,29 @@ class WorkModel(app: Application) : AndroidViewModel(app) {
             var derived: ByteArray? = null
             try {
                 val result = withContext(Dispatchers.IO) {
-                    val bytes = backup ?: if (exists) file.readFully() else null
+                    if (backup != null) return@withContext repository.restore(backup, password).also { derived = it.second }
+                    val bytes = if (exists) repository.envelope() else null
                     val s = bytes?.let(Vault::saltOf) ?: Vault.salt()
                     val k = Vault.key(password, s); derived = k
                     val d = if (bytes == null) Data() else Vault.decrypt(bytes, k).let { raw -> try { decode(raw) } finally { raw.fill(0) } }
                     Triple(s, k, d)
                 }
                 if (attempt == generation) {
-                    if (backup != null || !exists) {
+                    if (backup == null) {
                         withContext(Dispatchers.IO) {
-                            write(backup ?: Vault.encrypt(encode(result.third), result.second, result.first))
+                            repository.save(result.third, result.second, result.first)
                         }
                         exists = true
                     }
                     if (attempt == generation) {
                         salt = result.first; key = result.second; derived = null
-                        data = result.third; exists = true; session++
+                        val raw = Vault.decrypt(repository.envelope(), result.second)
+                        data = try { decode(raw) } finally { raw.fill(0) }; exists = true; session++
+                        data?.let { runCatching { Reminders.update(getApplication(), it) } }
                     }
                 }
             } catch (_: Exception) { error = "Entsperren fehlgeschlagen. Passwort oder Sicherungsdatei prüfen. Vorhandene Daten wurden nicht absichtlich ersetzt." }
-            finally { derived?.fill(0); password.fill('\u0000'); busy = false }
+            finally { backup?.delete(); derived?.fill(0); password.fill('\u0000'); busy = false }
         }
     }
     fun update(next: Data) {
@@ -65,12 +64,50 @@ class WorkModel(app: Application) : AndroidViewModel(app) {
         busy = true
         viewModelScope.launch {
             try {
-                withContext(Dispatchers.IO) { val raw = encode(next); try { require(raw.size < Vault.MAX_BYTES - 64); decode(raw); write(Vault.encrypt(raw, k, s)) } finally { raw.fill(0) } }
-                if (generation == attempt) data = next
+                val normalized = withContext(Dispatchers.IO) { repository.save(next, k, s) }
+                if (generation == attempt) data = normalized
+                runCatching { Reminders.update(getApplication(), normalized) }
             } catch (_: Exception) { error = "Speichern fehlgeschlagen. Änderung wurde nicht übernommen. Daten- und Bildlimit prüfen." }
             finally { k.fill(0); busy = false }
         }
     }
-    fun backup(): ByteArray = file.readFully()
+    suspend fun backup(target: File) = withContext(Dispatchers.IO) { target.outputStream().use { repository.export(it) } }
+    suspend fun image(value: String): ByteArray {
+        val k = key?.copyOf() ?: error("Tresor gesperrt")
+        return try { withContext(Dispatchers.IO) { repository.image(value, k) } } finally { k.fill(0) }
+    }
+    fun changePassword(oldPassword: CharArray, nextPassword: CharArray) {
+        val currentKey = key?.copyOf()
+        if (busy || currentKey == null) { currentKey?.fill(0); oldPassword.fill('\u0000'); nextPassword.fill('\u0000'); return }
+        busy = true; val attempt = generation
+        viewModelScope.launch {
+            var resultKey: ByteArray? = null
+            try {
+                val changed = withContext(Dispatchers.IO) {
+                    require(nextPassword.size >= 10)
+                    val checkKey = Vault.key(oldPassword, Vault.saltOf(repository.envelope()))
+                    try { require(java.security.MessageDigest.isEqual(checkKey, currentKey)) } finally { checkKey.fill(0) }
+                    repository.rekey(currentKey, nextPassword).also { resultKey = it.second }
+                }
+                getApplication<Application>().getSharedPreferences("biometric", 0).edit().clear().apply()
+                java.security.KeyStore.getInstance("AndroidKeyStore").apply { load(null); deleteEntry("werklog-biometric-v1") }
+                if (attempt == generation) { key?.fill(0); key = changed.second; resultKey = null; salt = changed.first; data = changed.third }
+                error = "Passwort geändert. Bitte neue Sicherung erstellen; ältere Sicherungen behalten ihr bisheriges Passwort."
+            } catch (_: Exception) { error = "Passwortwechsel fehlgeschlagen. Aktuelles Passwort und freien Speicher prüfen." }
+            finally { resultKey?.fill(0); currentKey.fill(0); oldPassword.fill('\u0000'); nextPassword.fill('\u0000'); busy = false }
+        }
+    }
+    fun biometricKey(): ByteArray? = key?.copyOf()
+    fun unlockKey(k: ByteArray) {
+        if (busy) { k.fill(0); return }; busy = true; val attempt = generation
+        viewModelScope.launch {
+            try {
+                val result = withContext(Dispatchers.IO) { val bytes = repository.envelope(); val raw = Vault.decrypt(bytes, k); try { Vault.saltOf(bytes) to decode(raw) } finally { raw.fill(0) } }
+                if (attempt == generation) { key = k.copyOf(); salt = result.first; data = result.second; session++; Reminders.update(getApplication(), result.second) }
+            } catch (_: Exception) { error = "Biometrie passt nicht zu diesem Tresor. Bitte mit Passwort öffnen und neu aktivieren." }
+            finally { k.fill(0); busy = false }
+        }
+    }
+    fun storageBytes() = repository.bytesUsed()
     override fun onCleared() { lock() }
 }

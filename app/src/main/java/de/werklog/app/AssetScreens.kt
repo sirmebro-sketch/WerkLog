@@ -27,6 +27,11 @@ import kotlinx.coroutines.delay
     TextButton(onClick = back) { Text("‹ Alle Anlagen") }
     Text(asset.name, fontSize = 28.sp, fontWeight = FontWeight.Bold)
     Text("${asset.trade} · ${asset.location.ifBlank { "Standort offen" }}", color = Mint)
+    Text(asset.tag, color = Muted)
+    Row {
+        TextButton(onClick = { save(data.copy(assets = data.assets.map { if (it.id == asset.id) it.copy(favorite = !it.favorite) else it })) }, enabled = !busy) { Text(if (asset.favorite) "★ Favorit entfernen" else "☆ Als Favorit merken") }
+    }
+    if (asset.parentId.isNotBlank()) Text("Gehört zu: ${assetName(data, asset.parentId)}", color = Muted)
     Choices(listOf("Übersicht", "Wissen", "Zugänge", "Verlauf"), section) { section = it }
     TextButton(onClick = { shareInfo = null; sharing = true }, enabled = !busy) { Text("Anlagenakte verschlüsselt teilen") }
     Spacer(Modifier.height(12.dp))
@@ -154,17 +159,19 @@ import kotlinx.coroutines.delay
         Field(title, { title = it }, "Überschrift *"); Field(body, { body = it }, "Information / Hinweis *", 6)
     }
 }
-@Composable internal fun AssetEditor(existing: Asset?, close: () -> Unit, save: (Asset) -> Unit) {
+@Composable internal fun AssetEditor(existing: Asset?, assets: List<Asset>, close: () -> Unit, save: (Asset) -> Unit) {
     var name by remember { mutableStateOf(existing?.name ?: "") }; var trade by remember { mutableStateOf(existing?.trade ?: trades.first()) }
     var location by remember { mutableStateOf(existing?.location ?: "") }; var note by remember { mutableStateOf(existing?.note ?: "") }
     var manufacturer by remember { mutableStateOf(existing?.manufacturer ?: "") }; var model by remember { mutableStateOf(existing?.model ?: "") }
     var serial by remember { mutableStateOf(existing?.serial ?: "") }; var contact by remember { mutableStateOf(existing?.contact ?: "") }
     var parts by remember { mutableStateOf(existing?.spareParts ?: "") }; var service by remember { mutableStateOf(existing?.nextService ?: "") }
+    var tag by remember { mutableStateOf(existing?.tag ?: "") }; var parent by remember { mutableStateOf(existing?.parentId ?: "") }
     Form("Anlageninformationen", name.isNotBlank() && (service.isBlank() || parseServiceDate(service) != null), close, {
-        save(Asset(existing?.id ?: newId(), name.trim(), trade, location.trim(), note.trim(), manufacturer.trim(), model.trim(), serial.trim(), contact.trim(), parts.trim(), service.trim()))
+        save(Asset(existing?.id ?: newId(), name.trim(), trade, location.trim(), note.trim(), manufacturer.trim(), model.trim(), serial.trim(), contact.trim(), parts.trim(), service.trim(), tag.trim(), parent, existing?.favorite ?: false, existing?.lastOpened ?: 0))
     }) {
         Field(name, { name = it }, "Anlagenname *"); Picker("Gewerk", trades.map { it to it }, trade) { trade = it }
-        Field(location, { location = it }, "Standort / Raum"); Field(manufacturer, { manufacturer = it }, "Hersteller")
+        Field(tag, { tag = it }, "Anlagenkennzeichen / KKS"); Picker("Übergeordnete Anlage", listOf("" to "Keine") + assets.filter { it.id != existing?.id }.map { it.id to it.name }, parent) { parent = it }
+        Field(location, { location = it }, "Gebäude / Standort / Raum"); Field(manufacturer, { manufacturer = it }, "Hersteller")
         Field(model, { model = it }, "Typ / Modell"); Field(serial, { serial = it }, "Kennzeichnung / Seriennummer")
         Field(contact, { contact = it }, "Servicekontakt / Ansprechpartner", 2)
         Field(parts, { parts = it }, "Ersatzteile, Artikelnummern, Lagerort", 3)
