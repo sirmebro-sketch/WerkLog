@@ -1,8 +1,8 @@
 # Abnahme auf Samsung Galaxy S24 Ultra
 
-Status: CI-Build am 29.09.2026 erfolgreich (Version 0.3.0, Run 36580771959). Gerätetests weiterhin offen.
+Status 0.4.0: Automatisierte Ergebnisse siehe unten. Die nachfolgenden Geräte-Checklisten bleiben bis zum tatsächlichen S24-Ultra-Test offen.
 
-- [x] Workflow: testDebugUnitTest (29 Tests), lintDebug, assembleDebug und APK-Netzwerkberechtigungsprüfung erfolgreich.
+- [x] Frühere Abnahme 0.3.0: 29 JVM-Tests, lintDebug, assembleDebug und APK-Netzwerkberechtigungsprüfung erfolgreich (Run 36580771959).
 - [ ] Installieren; Passwort anlegen; Start ohne Internet möglich.
 - [ ] Falsches Passwort entsperrt nicht. Richtiges Passwort stellt Daten wieder her.
 - [ ] App-Wechsel, Home, Bildschirm aus/an und Prozessende sperren die App.
@@ -45,9 +45,9 @@ Nicht mit echten sensiblen Betriebsdaten testen, solange Schutz und Freigaben of
 - [ ] Falscher Code oder veränderte Datei: keine Inhalte sichtbar, keine Daten importiert.
 - [ ] Share-Datei ist keine Vollsicherung und umgekehrt; beide falschen Importe werden abgewiesen.
 - [ ] E-Mail-Anhang enthält weder Code noch Gerätepasswort in Betreff/Dateiname/Text.
-- [ ] Dateiauswahl, erneutes Entsperren, Codeeingabe und Vorschau vollständig durchlaufen.
+- [ ] Dateiauswahl, Codeeingabe und Vorschau vollständig durchlaufen; ab 0.4.0 kurze Wechsel innerhalb der Austauschfrist ohne erneutes Entsperren.
 - [ ] Abbruch sowie App-Wechsel während Entschlüsseln zeigen keine Vorschau nach erneutem Entsperren.
-- [ ] Import mit gleichem Anlagennamen erzeugt neue Kopie; vorhandene Daten unverändert.
+- [ ] Import als neue Kopie lässt bestehende Daten unverändert; ab 0.4.0 ist alternativ eine ausdrückliche Zuordnung zu einer vorhandenen Anlage möglich.
 - [ ] Große Schrift / kleine Displays: Vorschau und Code vollständig lesbar.
 
 ## Zusätzliche Geräteabnahme 0.3.0
@@ -58,7 +58,7 @@ Nicht mit echten sensiblen Betriebsdaten testen, solange Schutz und Freigaben of
 - [ ] Kameraabbruch, Prozessende, Rotation und Rückkehr: temporäre Bilder gelöscht, kein Absturz, ggf. verständliche Wiederholung.
 - [ ] Anleitungsfoto im Hoch-/Querformat, große Aufnahme: Orientierung korrekt, Bild klein und nach Neustart vorhanden.
 - [ ] Schritt ergänzen, bearbeiten, nach oben verschieben, mit/ohne Bild; allgemeine und anlagenbezogene Anleitung.
-- [ ] 30-Bilder-/8-MiB-Limit: Speichern eines übergroßen Imports erhält den alten gültigen Stand.
+- [ ] Historischer 0.3.0-Grenztest: 30 Bilder/8 MiB; in 0.4.0 durch 500 Bilder plus 32 MiB Metadaten ersetzt. Übergrenzen-Import erhält weiterhin den alten gültigen Stand.
 - [ ] Kalender Monatswechsel, heutiger Tag, mehrere Termine, Fremdfirma, Kontakt, Zuständiger, Abgesagt/Erledigt.
 - [ ] Bestellliste mit mehreren Positionen, Bildern, lokaler Anlagenzuordnung; E-Mail-Vorschau und tatsächliche Anhänge in verwendeter Mail-App prüfen.
 - [ ] Mail-Entwurf nicht abgesendet: in WerkLog niemals als automatisch bestellt/gesendet markiert.
@@ -68,7 +68,17 @@ Nicht mit echten sensiblen Betriebsdaten testen, solange Schutz und Freigaben of
 
 ## Abnahme 0.4.0
 
-Automatisierte Repository-Tests decken 500 Bilder, >8-MiB-Backup, falsches Passwort, fehlende/manipulierte Bilder, Pfadmanipulation, Migration, Passwortrotation, große Freigaben und Android/Apple-Testvektoren ab. Ergebnisse des finalen CI-Laufs gesondert prüfen.
+Automatisierte Abnahme vom 29.09.2026, Android-Code `427bfd08c5a695fe4d1ad8835ce70f4afe4fcfb9`:
+
+- [x] [Android-CI](https://github.com/sirmebro-sketch/WerkLog/actions/runs/36620707570): 40 JVM-Tests, Lint, APK-Build und Prüfung ohne Internet-/Netzwerkstatus-Berechtigung erfolgreich.
+- [x] Repository-Tests: 500 synthetische Bilder, Backup >8 MiB, falsches Passwort, fehlende/manipulierte Bilder, Pfadmanipulation, Migration, Passwortrotation, große Freigaben und gemeinsame Android/Apple-Kryptovektoren.
+- [x] [Android-15-Emulator](https://github.com/sirmebro-sketch/WerkLog/actions/runs/36620707773): Einrichtung, Einführung überspringen, Betrieb öffnen, Anlage anlegen/bearbeiten, Passwort ändern, manuell sperren und mit neuem Passwort auf Heute entsperren.
+- [x] Betrieb-Screenshot visuell geprüft: acht beschriftete Kacheln, genau drei Hauptpunkte, hervorgehobener mittlerer Betrieb-Knopf; keine abgeschnittenen Beschriftungen bei Standardschrift.
+- [x] [Swift-Paket](https://github.com/sirmebro-sketch/WerkLog/actions/runs/36618330660): Codec-Test auf macOS erfolgreich; kein iOS-Oberflächentest.
+
+Ausgelieferte Test-APK: `WerkLog-0.4.0-Test.apk`, SHA-256 `9e7af145d5f7b63ea997f5f393adb97219cb7cbfe0601ca7e3dcc52c192db5f5`.
+
+Die folgenden Punkte brauchen weiterhin ein reales Gerät. Die synthetischen Speicherprüfungen ersetzen keine Aufnahme/Anzeige von 200 echten Fotos.
 
 - [ ] Drei Hauptpunkte; Betrieb auffälliger und mittig, Kacheln mit Symbol; 150 % Schrift.
 - [ ] Start/Entsperren auf Heute; Datum/Wochentag und wiederkehrende anstehende Termine korrekt.

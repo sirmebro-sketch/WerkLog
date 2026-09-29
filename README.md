@@ -31,7 +31,7 @@ Anlage oder Wissenseintrag verschlüsselt mit separatem Zufallscode teilen; Pass
 
 ## Qualität und verbleibende Arbeit
 
-[Android-Builds und Tests](https://github.com/sirmebro-sketch/WerkLog/actions), zusätzlicher Android-Emulator-Bedienablauf und Swift-Codec-Test. Der aktuelle finale Prüflauf wird vor APK-Auslieferung kontrolliert. Kamera, reale Zählererkennung, Biometrie und Mail-App müssen auf dem S24 Ultra erprobt werden. Keine produktive Gerätefreigabe behauptet.
+Am 29.09.2026 erfolgreich: [Android-Build mit 40 JVM-Tests, Lint und APK-Netzwerkprüfung](https://github.com/sirmebro-sketch/WerkLog/actions/runs/36620707570), [Bedienablauf im Android-15-Emulator samt Layoutaufnahme](https://github.com/sirmebro-sketch/WerkLog/actions/runs/36620707773) und [Swift-Codec-Test](https://github.com/sirmebro-sketch/WerkLog/actions/runs/36618330660). Kamera, reale Zählererkennung, Biometrie und Mail-App müssen auf dem S24 Ultra erprobt werden. Keine produktive Gerätefreigabe behauptet.
 
 - [Umsetzung und offene Punkte](docs/ROADMAP.md)
 - [Geräteabnahme](docs/DEVICE-TEST.md)

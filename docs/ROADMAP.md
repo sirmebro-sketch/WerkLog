@@ -1,6 +1,8 @@
 # Stand 0.4.0 — Umsetzung und Grenzen
 
-## Eingebaut, abschließende CI-/Emulator-Abnahme separat dokumentieren
+## Eingebaut und automatisiert geprüft
+
+Android-Build (40 JVM-Tests, Lint, APK-Netzwerkprüfung) und Android-15-Bedienablauf erfolgreich am 29.09.2026. Details und noch offene Gerätetests: [DEVICE-TEST.md](DEVICE-TEST.md).
 
 - Drei Hauptpunkte: Heute, hervorgehobener Betrieb, Einstellung; Start auf Heute.
 - Betrieb mit zwei Kacheln pro Zeile, Symbolen und kurzen Bezeichnungen.
