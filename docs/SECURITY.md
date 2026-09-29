@@ -27,3 +27,21 @@ Vor Nutzung realer betrieblicher Daten klären, ob das Endgerät und dieser Doku
 ## Vor produktiver Nutzung
 
 Erfolgreicher CI-Build, Sicherheits-/Lifecycle-Gerätetests, persistente Release-Signatur und interne Nutzungsfreigabe. Die implementierten Schutzmechanismen wurden hier nicht auf einem Android-Gerät verifiziert.
+
+## Anlagenzugänge ab 0.2.0
+
+Zugangseinträge werden zusammen mit allen Daten per AES-GCM verschlüsselt, nie als separate Klartextdatei. Mehrere Zugänge werden über die Anlagen-ID zugeordnet. Anzeige standardmäßig maskiert, gezieltes Anzeigen maximal 20 Sekunden. Beim Verlassen der App greift weiterhin die Sitzungssperre. Es gibt bewusst keine Zwischenablagefunktion. Ein Passwortvorschlag ist ein noch nicht gespeicherter Formularwert; seine Erzeugung setzt das reale Anlagenpasswort nicht zurück. Die erzeugten Zeichen müssen mit dem jeweiligen Anlagen-System kompatibel sein.
+
+Die E-Mail-Funktion erhält nur Vorgänge und Anlagennamen. Zugangseinträge, Wissenseinträge und Servicekontakte werden nicht automatisch übernommen. Geheimnisse deshalb nicht in allgemeine Vorgangsnotizen kopieren. Diese Notizen werden bei Übergaben bewusst geteilt.
+
+Schema 2 liest alte Schema-1-Sicherungen. Version 0.1.0 kann neue Sicherungen nicht lesen. Vor einer Neuinstallation verschlüsselt sichern; die bisherigen CI-Debug-Signaturen sind nicht dauerhaft identisch. Neuinstallation löscht den lokalen Tresor, Wiederherstellung braucht Sicherung und deren Passwort.
+
+## Verschlüsselter Kollegenaustausch
+
+`.werkshare` enthält ausschließlich einen getrennten WRKSHR01-Header, zufälligen Salt und IV sowie AES-256-GCM-verschlüsselten Inhalt. PBKDF2-HMAC-SHA256 (310.000 Iterationen) leitet den Dateischlüssel aus einem zufälligen 20-Zeichen-Code ab (rund 99 Bit Entropie). Pro Freigabe neuer Code, Salt und IV. Header authentifiziert, manipulierte Inhalte werden abgewiesen. Vollsicherungen WRKLOG01 und Austauschdateien sind getrennte Formate.
+
+Das Gerätepasswort wird nie weitergegeben. Der Code wird nur während der Erstellung angezeigt, nicht in Datei, Dateiname, Nachricht, Logs oder dauerhaften Einstellungen gespeichert. Datei und Code getrennt übergeben. Keine App-exklusive Entschlüsselungsgarantie: Jeder mit Datei, Code und kompatibler Software kann entschlüsseln. Das ist beabsichtigt und sicherer als geheime Dateiformate. Kein Widerruf und keine Verfallszeit für exportierte Dateien. Der Code ist kein Nachweis einer bestimmten Absenderidentität.
+
+Standardmäßig werden Stammdaten und Wissen geteilt. Zugangsdaten und Vorgangshistorie müssen ausdrücklich eingeschlossen werden. Beim Teilen eines einzelnen Wissenseintrags werden nur dieser und Anlagenname/Gewerk als Zuordnung exportiert. Die Vorschau des Empfängers maskiert Passwörter; nach bestätigtem Import sind sie im eigenen verschlüsselten Tresor. Import erzeugt eine neue Anlagenkopie mit neuen IDs, niemals automatisches Überschreiben.
+
+Android FileProvider gewährt nur Leserechte für einen Unterordner mit bereits verschlüsselten Austauschdateien. Temporäre Freigaben älter als 24 Stunden werden beim nächsten App-Start entfernt. Kopien in Mail- oder Datei-Apps bleiben davon unberührt. Keine INTERNET-Berechtigung. Ausgewählte Dateianbieter oder die gewählte Versand-App können Daten entsprechend ihrer eigenen Funktionen übertragen.

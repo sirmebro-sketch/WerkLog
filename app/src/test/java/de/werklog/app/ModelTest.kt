@@ -21,6 +21,6 @@ class ModelTest {
         assertThrows(IllegalArgumentException::class.java) { decode(encode(Data(entries = listOf(Entry(assetId = "missing", title = "Test", note = ""))))) }
     }
     @Test fun unknownSchemaIsRejected() {
-        assertThrows(IllegalArgumentException::class.java) { decode("{\"schema\":2}".toByteArray()) }
+        assertThrows(IllegalArgumentException::class.java) { decode("{\"schema\":999}".toByteArray()) }
     }
 }

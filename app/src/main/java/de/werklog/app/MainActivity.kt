@@ -1,9 +1,17 @@
 package de.werklog.app
 
+import android.content.ClipData
 import android.content.Intent
+import androidx.core.content.FileProvider
+import androidx.lifecycle.lifecycleScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import java.io.File
 import android.net.Uri
 import android.os.Bundle
 import android.view.WindowManager
+import androidx.activity.compose.BackHandler
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -31,16 +39,17 @@ import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 
-private val Mint = Color(0xFF64DECB)
-private val Amber = Color(0xFFFFCC80)
-private val Muted = Color(0xFFABC1C7)
+internal val Mint = Color(0xFF64DECB)
+internal val Amber = Color(0xFFFFCC80)
+internal val Muted = Color(0xFFABC1C7)
 private val WerkColors = darkColorScheme(primary = Mint, onPrimary = Color(0xFF00382F), secondary = Amber,
     background = Color(0xFF0C191E), surface = Color(0xFF14262D), surfaceVariant = Color(0xFF20363E), onSurface = Color(0xFFE8F2F3))
-fun stamp(time: Long) = DateTimeFormatter.ofPattern("dd.MM.yyyy · HH:mm").withZone(ZoneId.systemDefault()).format(Instant.ofEpochMilli(time))
 
 class MainActivity : ComponentActivity() {
     private val model: WorkModel by viewModels()
     private var pendingBackup: ByteArray? = null
+    private var importBytes by mutableStateOf<ByteArray?>(null)
+    private val importAsset = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri -> if (uri != null) readShare(uri) }
     private var restoreBytes by mutableStateOf<ByteArray?>(null)
     private val export = registerForActivityResult(ActivityResultContracts.CreateDocument("application/octet-stream")) { uri ->
         val bytes = pendingBackup; pendingBackup = null
@@ -58,6 +67,8 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
         enableEdgeToEdge()
+        receiveShare(intent)
+        File(cacheDir, "shares").listFiles()?.filter { System.currentTimeMillis() - it.lastModified() > 86_400_000 }?.forEach { it.delete() }
         setContent { MaterialTheme(colorScheme = WerkColors) {
             Surface(Modifier.fillMaxSize(), color = WerkColors.background) {
                 key(model.session) {
@@ -65,7 +76,10 @@ class MainActivity : ComponentActivity() {
                     else Workspace(model, onExport = {
                         runCatching { pendingBackup = model.backup(); export.launch("WerkLog-${java.time.LocalDate.now()}.werklog") }
                             .onFailure { model.error = "Sicherung konnte nicht geöffnet werden." }
-                    }, onShare = ::share)
+                    }, onShare = ::share, onShareFile = ::shareFile, onImport = { importAsset.launch(arrayOf("*/*")) })
+                    if (model.data != null && importBytes != null) ImportAssetDialog(importBytes!!, model.busy, { importBytes = null }) { incoming ->
+                        model.data?.let { model.update(importPackage(it, incoming)) }
+                    }
                 }
                 model.error?.let { message -> AlertDialog(onDismissRequest = { model.error = null }, title = { Text("Hinweis") },
                     text = { Text(message) }, confirmButton = { TextButton(onClick = { model.error = null }) { Text("Verstanden") } }) }
@@ -73,6 +87,36 @@ class MainActivity : ComponentActivity() {
         } }
     }
     override fun onStop() { super.onStop(); model.lock() }
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent); setIntent(intent); model.lock(); receiveShare(intent)
+    }
+    private fun receiveShare(intent: Intent?) {
+        if (intent?.action == Intent.ACTION_VIEW) intent.data?.let(::readShare)
+    }
+    private fun readShare(uri: Uri) {
+        if (uri.scheme != "content") { model.error = "Bitte eine lokale Freigabedatei über den Dateidialog öffnen."; return }
+        lifecycleScope.launch {
+            try {
+                val bytes = withContext(Dispatchers.IO) {
+                    contentResolver.openInputStream(uri)?.use { it.readBytesLimited() } ?: error("Kein Zugriff")
+                }
+                Exchange.checkEnvelope(bytes); importBytes = bytes
+            } catch (_: Exception) { model.error = "Keine gültige Anlagenfreigabe oder Datei größer als 8 MB." }
+        }
+    }
+    private fun shareFile(bytes: ByteArray) {
+        try {
+            val directory = File(cacheDir, "shares").also { it.mkdirs() }
+            val file = File(directory, "WerkLog-${newId()}.werkshare").also { it.writeBytes(bytes) }
+            val uri = FileProvider.getUriForFile(this, "$packageName.files", file)
+            val intent = Intent(Intent.ACTION_SEND).setType("application/vnd.werklog.asset")
+                .putExtra(Intent.EXTRA_STREAM, uri).putExtra(Intent.EXTRA_SUBJECT, "WerkLog · verschlüsselte Anlagenfreigabe")
+                .putExtra(Intent.EXTRA_TEXT, "Verschlüsselte WerkLog-Freigabe. Den Code übermittle ich separat.")
+                .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            intent.clipData = ClipData.newRawUri("WerkLog-Anlagenfreigabe", uri)
+            startActivity(Intent.createChooser(intent, "Verschlüsselte Datei teilen"))
+        } catch (_: Exception) { model.error = "Datei konnte nicht geteilt werden. Freigabe bitte erneut erstellen." }
+    }
     private fun share(subject: String, text: String) {
         try {
             val intent = Intent(Intent.ACTION_SENDTO, Uri.parse("mailto:"))
@@ -117,14 +161,17 @@ private fun java.io.InputStream.readBytesLimited(): ByteArray {
     }
 }
 
-@Composable private fun Workspace(model: WorkModel, onExport: () -> Unit, onShare: (String, String) -> Unit) {
+@Composable private fun Workspace(model: WorkModel, onExport: () -> Unit, onShare: (String, String) -> Unit, onShareFile: (ByteArray) -> Unit, onImport: () -> Unit) {
     val d = model.data ?: return
     var page by rememberSaveable { mutableIntStateOf(0) }
     var dialog by remember { mutableStateOf<String?>(null) }
+    var selectedAssetId by remember { mutableStateOf<String?>(null) }
+    var preselectedAssetId by remember { mutableStateOf<String?>(null) }
     var editAsset by remember { mutableStateOf<Asset?>(null) }
     var editEntry by remember { mutableStateOf<Entry?>(null) }
     var run by remember { mutableStateOf<Round?>(null) }
     var mail by remember { mutableStateOf<Pair<String, String>?>(null) }
+    BackHandler(enabled = page == 1 && selectedAssetId != null && dialog == null) { selectedAssetId = null }
     val tabs = listOf("Heute", "Anlagen", "Journal", "Rundgang", "Mehr")
     val icons = listOf(Icons.Outlined.Dashboard, Icons.Outlined.PrecisionManufacturing, Icons.Outlined.Assignment, Icons.Outlined.Checklist, Icons.Outlined.MoreHoriz)
     Scaffold(containerColor = WerkColors.background, bottomBar = {
@@ -149,10 +196,18 @@ private fun java.io.InputStream.readBytesLimited(): ByteArray {
                         }
                     }
                     Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                        Button(onClick = { editEntry = null; dialog = "entry" }, modifier = Modifier.weight(1f), enabled = d.assets.isNotEmpty() && !model.busy) { Text("+ Störung") }
-                        OutlinedButton(onClick = { dialog = "reading" }, modifier = Modifier.weight(1f), enabled = d.assets.isNotEmpty() && !model.busy) { Text("+ Messwert") }
+                        Button(onClick = { editEntry = null; preselectedAssetId = null; dialog = "entry" }, modifier = Modifier.weight(1f), enabled = d.assets.isNotEmpty() && !model.busy) { Text("+ Störung") }
+                        OutlinedButton(onClick = { preselectedAssetId = null; dialog = "reading" }, modifier = Modifier.weight(1f), enabled = d.assets.isNotEmpty() && !model.busy) { Text("+ Messwert") }
                     }
                     if (d.assets.isEmpty()) Empty("Dein Arbeitsplatz, deine Struktur", "Lege zuerst eine Anlage an. Danach kannst du Störungen und Messwerte direkt zuordnen.") { editAsset = null; dialog = "asset" }
+                    val due = d.assets.filter { serviceState(it.nextService) in listOf("Überfällig", "Heute fällig", "In den nächsten 30 Tagen") }.sortedBy { parseServiceDate(it.nextService) }
+                    if (due.isNotEmpty()) {
+                        Section("Wartungen im Blick")
+                        due.take(5).forEach { a -> Panel {
+                            Text(a.name, fontWeight = FontWeight.Bold); Text("${serviceState(a.nextService)} · ${a.nextService}", color = Amber)
+                            TextButton(onClick = { selectedAssetId = a.id; page = 1 }) { Text("Anlagenakte öffnen") }
+                        } }
+                    }
                     Section("Für die nächste Übergabe")
                     val open = d.entries.filter { it.status != "Erledigt" }.sortedWith(compareByDescending<Entry> { priorities.indexOf(it.priority) }.thenByDescending { it.updated })
                     if (open.isEmpty()) Hint("Keine offenen Einträge. Neue Störungen erscheinen hier.")
@@ -160,18 +215,27 @@ private fun java.io.InputStream.readBytesLimited(): ByteArray {
                     OutlinedButton(onClick = { mail = "WerkLog · Schichtübergabe" to handover(d) }, enabled = !model.busy, modifier = Modifier.fillMaxWidth()) { Text("Übergabe ansehen & per E-Mail teilen") }
                 }
                 1 -> {
-                    var query by remember { mutableStateOf("") }
-                    Field(query, { query = it }, "Anlage oder Standort suchen")
-                    Button(onClick = { editAsset = null; dialog = "asset" }, enabled = !model.busy) { Text("+ Anlage anlegen") }
-                    val filtered = d.assets.filter { "${it.name} ${it.location} ${it.trade}".contains(query, true) }
-                    if (filtered.isEmpty()) Hint("Keine Anlagen gefunden. Lege deine erste Anlage an oder ändere die Suche.")
-                    filtered.forEach { a -> Panel {
-                        Text(a.trade.uppercase(), color = Mint, fontSize = 11.sp); Text(a.name, fontSize = 21.sp, fontWeight = FontWeight.Bold)
-                        Text(a.location.ifBlank { "Kein Standort hinterlegt" }, color = Muted)
-                        if (a.note.isNotBlank()) Text(a.note, modifier = Modifier.padding(top = 8.dp))
-                        Text("${d.entries.count { it.assetId == a.id && it.status != "Erledigt" }} offen · ${d.readings.count { it.assetId == a.id }} Messwerte", color = Amber, modifier = Modifier.padding(top = 12.dp))
-                        TextButton(onClick = { editAsset = a; dialog = "asset" }) { Text("Anlage bearbeiten") }
-                    } }
+                    val selected = d.assets.find { it.id == selectedAssetId }
+                    if (selected != null) {
+                        AssetDetails(selected, d, model.busy, { selectedAssetId = null }, { editAsset = selected; dialog = "asset" },
+                            { next -> model.update(next) },
+                            { editEntry = null; preselectedAssetId = selected.id; dialog = "entry" },
+                            { preselectedAssetId = selected.id; dialog = "reading" },
+                            { e -> editEntry = e; dialog = "entry" }, onShareFile)
+                    } else {
+                        var query by remember { mutableStateOf("") }
+                        Field(query, { query = it }, "Name, Standort, Hersteller oder Seriennummer")
+                        Button(onClick = { editAsset = null; dialog = "asset" }, enabled = !model.busy) { Text("+ Anlage anlegen") }
+                        val filtered = d.assets.filter { "${it.name} ${it.location} ${it.trade} ${it.manufacturer} ${it.model} ${it.serial}".contains(query, true) }.sortedBy { it.name.lowercase() }
+                        if (filtered.isEmpty()) Hint("Keine Anlagen gefunden. Lege deine erste Anlage an oder ändere die Suche.")
+                        filtered.forEach { a -> Panel {
+                            Text(a.trade.uppercase(), color = Mint, fontSize = 11.sp); Text(a.name, fontSize = 21.sp, fontWeight = FontWeight.Bold)
+                            Text(a.location.ifBlank { "Kein Standort hinterlegt" }, color = Muted)
+                            Text("${d.entries.count { it.assetId == a.id && it.status != "Erledigt" }} offen · ${d.credentials.count { it.assetId == a.id }} Zugänge", color = Mint, modifier = Modifier.padding(top = 8.dp))
+                            if (a.nextService.isNotBlank()) Text("${serviceState(a.nextService)} · ${a.nextService}", color = Amber)
+                            Button(onClick = { selectedAssetId = a.id }) { Text("Anlagenakte öffnen") }
+                        } }
+                    }
                 }
                 2 -> {
                     var query by remember { mutableStateOf("") }; var filter by remember { mutableStateOf("Alle") }; var kind by remember { mutableStateOf("Störungen") }
@@ -179,12 +243,12 @@ private fun java.io.InputStream.readBytesLimited(): ByteArray {
                     Field(query, { query = it }, "Journal durchsuchen")
                     if (kind == "Störungen") {
                         Choices(listOf("Alle") + statuses, filter) { filter = it }
-                        Button(onClick = { editEntry = null; dialog = "entry" }, enabled = d.assets.isNotEmpty() && !model.busy) { Text("+ Eintrag") }
+                        Button(onClick = { editEntry = null; preselectedAssetId = null; dialog = "entry" }, enabled = d.assets.isNotEmpty() && !model.busy) { Text("+ Eintrag") }
                         val list = d.entries.filter { (filter == "Alle" || it.status == filter) && "${it.title} ${it.note} ${assetName(d, it.assetId)}".contains(query, true) }.sortedByDescending { it.updated }
                         if (list.isEmpty()) Hint("Keine passenden Einträge.")
                         list.forEach { e -> EntryCard(e, d, { editEntry = e; dialog = "entry" }) }
                     } else {
-                        Button(onClick = { dialog = "reading" }, enabled = d.assets.isNotEmpty() && !model.busy) { Text("+ Messwert erfassen") }
+                        Button(onClick = { preselectedAssetId = null; dialog = "reading" }, enabled = d.assets.isNotEmpty() && !model.busy) { Text("+ Messwert erfassen") }
                         val list = d.readings.filter { "${it.label} ${assetName(d, it.assetId)}".contains(query, true) }.sortedByDescending { it.created }
                         if (list.isEmpty()) Hint("Noch keine passenden Messwerte. Es werden keine Grenzwerte oder automatischen Sicherheitsbewertungen angenommen.")
                         list.forEach { r -> Panel {
@@ -211,18 +275,20 @@ private fun java.io.InputStream.readBytesLimited(): ByteArray {
                         Text("Beim Verlassen wird die App gesperrt. Screenshots sind blockiert. Ein verlorenes Passwort lässt sich nicht zurücksetzen.", modifier = Modifier.padding(top = 12.dp)) }
                     Button(onClick = onExport, enabled = !model.busy, modifier = Modifier.fillMaxWidth()) { Text("Verschlüsselte Sicherung speichern") }
                     Hint("Wähle einen lokalen Ordner, wenn die Sicherung auf dem Gerät bleiben soll. Der Android-Dateidialog kann auch Cloud-Anbieter anzeigen. Wiederherstellen ist am Sperrbildschirm möglich.")
+                    OutlinedButton(onClick = onImport, enabled = !model.busy, modifier = Modifier.fillMaxWidth()) { Text("Anlagenfreigabe eines Kollegen importieren") }
+                    Hint("Öffnet eine .werkshare-Datei. Nach der Dateiauswahl die App erneut entsperren und den separat erhaltenen Code eingeben.")
                     OutlinedButton(onClick = { mail = "WerkLog · Schichtübergabe" to handover(d) }, modifier = Modifier.fillMaxWidth()) { Text("Schichtübergabe vorbereiten") }
                     Section("Für deinen Arbeitsalltag")
                     Hint("WerkLog dokumentiert Beobachtungen und Tätigkeiten. Freigaben, Betriebsanweisungen und eure offiziellen Meldewege bleiben maßgeblich. Keine Anlagensteuerung oder Verbindung zur GLT.")
-                    Text("WERKLOG 0.1.0 · KOTLIN / ANDROID", color = Muted, fontSize = 11.sp)
+                    Text("WERKLOG 0.2.0 · KOTLIN / ANDROID", color = Muted, fontSize = 11.sp)
                 }
             }
             Spacer(Modifier.height(24.dp))
         }
     }
     if (dialog == "asset") AssetEditor(editAsset, { dialog = null }) { a -> model.update(d.copy(assets = d.assets.filterNot { it.id == a.id } + a)); dialog = null }
-    if (dialog == "entry") EntryEditor(editEntry, d.assets, { dialog = null }) { e -> model.update(d.copy(entries = d.entries.filterNot { it.id == e.id } + e)); dialog = null }
-    if (dialog == "reading") ReadingEditor(d.assets, { dialog = null }) { r -> model.update(d.copy(readings = d.readings + r)); dialog = null }
+    if (dialog == "entry") EntryEditor(editEntry, d.assets, preselectedAssetId, { dialog = null }) { e -> model.update(d.copy(entries = d.entries.filterNot { it.id == e.id } + e)); dialog = null }
+    if (dialog == "reading") ReadingEditor(d.assets, preselectedAssetId, { dialog = null }) { r -> model.update(d.copy(readings = d.readings + r)); dialog = null }
     if (dialog == "round") RoundEditor({ dialog = null }) { r -> model.update(d.copy(rounds = d.rounds + r)); dialog = null }
     run?.let { r -> RoundRunner(r, { run = null }) { result -> model.update(d.copy(runs = d.runs + result)); run = null } }
     mail?.let { m -> AlertDialog(onDismissRequest = { mail = null }, title = { Text("E-Mail-Vorschau") }, text = {
@@ -233,56 +299,37 @@ private fun java.io.InputStream.readBytesLimited(): ByteArray {
     }, confirmButton = { TextButton(onClick = { mail = null; onShare(m.first, m.second) }) { Text("E-Mail-App öffnen") } }, dismissButton = { TextButton(onClick = { mail = null }) { Text("Abbrechen") } }) }
 }
 
-private fun assetName(d: Data, id: String) = d.assets.find { it.id == id }?.name ?: "Anlage"
-private fun handover(d: Data) = buildString {
-    append("SCHICHTÜBERGABE · WERKLOG\n${stamp(System.currentTimeMillis())}\n\nOFFENE VORGÄNGE\n")
-    val open = d.entries.filter { it.status != "Erledigt" }.sortedByDescending { priorities.indexOf(it.priority) }
-    if (open.isEmpty()) append("Keine offenen Vorgänge.\n")
-    open.forEach { append("\n[${it.priority} · ${it.status}] ${it.title}\n${assetName(d, it.assetId)}\n${it.note}\nAktualisiert: ${stamp(it.updated)}\nAufwand: ${it.minutes} min\n") }
-    val today = java.time.LocalDate.now()
-    val done = d.entries.filter { it.status == "Erledigt" && Instant.ofEpochMilli(it.updated).atZone(ZoneId.systemDefault()).toLocalDate() == today }
-    append("\nHEUTE ERLEDIGT\n"); if (done.isEmpty()) append("Keine Einträge.\n")
-    done.forEach { append("• ${assetName(d, it.assetId)}: ${it.title}\n${it.note}\n") }
-}
 @Composable private fun Metric(value: String, label: String, color: Color = Mint) { Column { Text(value, fontSize = 36.sp, color = color, fontWeight = FontWeight.Bold); Text(label, color = Muted, fontSize = 13.sp) } }
-@Composable private fun Panel(content: @Composable ColumnScope.() -> Unit) { Card(Modifier.fillMaxWidth().padding(bottom = 12.dp), colors = CardDefaults.cardColors(containerColor = WerkColors.surface)) { Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(4.dp), content = content) } }
-@Composable private fun Section(title: String) { Text(title, fontSize = 18.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 22.dp, bottom = 12.dp)) }
-@Composable private fun Hint(text: String) { Text(text, color = Muted, fontSize = 14.sp, modifier = Modifier.padding(vertical = 12.dp)) }
+@Composable internal fun Panel(content: @Composable ColumnScope.() -> Unit) { Card(Modifier.fillMaxWidth().padding(bottom = 12.dp), colors = CardDefaults.cardColors(containerColor = WerkColors.surface)) { Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(4.dp), content = content) } }
+@Composable internal fun Section(title: String) { Text(title, fontSize = 18.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 22.dp, bottom = 12.dp)) }
+@Composable internal fun Hint(text: String) { Text(text, color = Muted, fontSize = 14.sp, modifier = Modifier.padding(vertical = 12.dp)) }
 @Composable private fun Empty(title: String, body: String, click: () -> Unit) { Panel { Text(title, fontWeight = FontWeight.Bold); Hint(body); TextButton(onClick = click) { Text("Erste Anlage anlegen") } } }
-@Composable private fun EntryCard(e: Entry, d: Data, click: () -> Unit) { Panel {
+@Composable internal fun EntryCard(e: Entry, d: Data, click: () -> Unit) { Panel {
     Text("${e.priority.uppercase()}  ·  ${e.status}", color = if (e.priority == "Dringend") Amber else Mint, fontSize = 11.sp)
     Text(e.title, fontSize = 20.sp, fontWeight = FontWeight.Bold); Text(assetName(d, e.assetId), color = Muted)
     if (e.note.isNotBlank()) Text(e.note, maxLines = 3)
     Text(stamp(e.updated), fontSize = 11.sp, color = Muted); TextButton(onClick = click) { Text("Öffnen & bearbeiten") }
 } }
-@Composable private fun Field(value: String, change: (String) -> Unit, label: String, lines: Int = 1, numeric: Boolean = false) {
+@Composable internal fun Field(value: String, change: (String) -> Unit, label: String, lines: Int = 1, numeric: Boolean = false) {
     OutlinedTextField(value, { if (it.length <= 10000) change(it) }, label = { Text(label) }, modifier = Modifier.fillMaxWidth().padding(bottom = 10.dp), minLines = lines, maxLines = if (lines == 1) 1 else 8,
         singleLine = lines == 1, keyboardOptions = KeyboardOptions(keyboardType = if (numeric) KeyboardType.Decimal else KeyboardType.Text))
 }
 @OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
-@Composable private fun Choices(options: List<String>, selected: String, change: (String) -> Unit) {
+@Composable internal fun Choices(options: List<String>, selected: String, change: (String) -> Unit) {
     FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) { options.forEach { FilterChip(selected == it, { change(it) }, label = { Text(it) }) } }
 }
-@Composable private fun Picker(label: String, values: List<Pair<String, String>>, selected: String, change: (String) -> Unit) {
+@Composable internal fun Picker(label: String, values: List<Pair<String, String>>, selected: String, change: (String) -> Unit) {
     var expanded by remember { mutableStateOf(false) }
     Box { OutlinedButton(onClick = { expanded = true }, modifier = Modifier.fillMaxWidth()) { Text("$label: ${values.find { it.first == selected }?.second ?: "Auswählen"}") }
         DropdownMenu(expanded, { expanded = false }) { values.forEach { v -> DropdownMenuItem(text = { Text(v.second) }, onClick = { change(v.first); expanded = false }) } }
     }
 }
-@Composable private fun Form(title: String, valid: Boolean, close: () -> Unit, save: () -> Unit, content: @Composable ColumnScope.() -> Unit) {
+@Composable internal fun Form(title: String, valid: Boolean, close: () -> Unit, save: () -> Unit, content: @Composable ColumnScope.() -> Unit) {
     AlertDialog(onDismissRequest = close, title = { Text(title) }, text = { Column(Modifier.heightIn(max = 520.dp).verticalScroll(rememberScrollState()), content = content) },
         confirmButton = { TextButton(onClick = save, enabled = valid) { Text("Speichern") } }, dismissButton = { TextButton(onClick = close) { Text("Abbrechen") } })
 }
-@Composable private fun AssetEditor(existing: Asset?, close: () -> Unit, save: (Asset) -> Unit) {
-    var name by remember { mutableStateOf(existing?.name ?: "") }; var trade by remember { mutableStateOf(existing?.trade ?: trades.first()) }
-    var location by remember { mutableStateOf(existing?.location ?: "") }; var note by remember { mutableStateOf(existing?.note ?: "") }
-    Form("Anlage", name.isNotBlank(), close, { save(Asset(existing?.id ?: newId(), name.trim(), trade, location.trim(), note.trim())) }) {
-        Field(name, { name = it }, "Anlagenname *"); Picker("Gewerk", trades.map { it to it }, trade) { trade = it }
-        Field(location, { location = it }, "Standort / Raum"); Field(note, { note = it }, "Kennzeichnung, Typ, Hinweise", 3)
-    }
-}
-@Composable private fun EntryEditor(existing: Entry?, assets: List<Asset>, close: () -> Unit, save: (Entry) -> Unit) {
-    var asset by remember { mutableStateOf(existing?.assetId ?: assets.firstOrNull()?.id.orEmpty()) }
+@Composable private fun EntryEditor(existing: Entry?, assets: List<Asset>, initialAssetId: String?, close: () -> Unit, save: (Entry) -> Unit) {
+    var asset by remember { mutableStateOf(existing?.assetId ?: initialAssetId ?: assets.firstOrNull()?.id.orEmpty()) }
     var title by remember { mutableStateOf(existing?.title ?: "") }; var note by remember { mutableStateOf(existing?.note ?: "") }
     var priority by remember { mutableStateOf(existing?.priority ?: "Normal") }; var status by remember { mutableStateOf(existing?.status ?: "Offen") }
     var minutes by remember { mutableStateOf((existing?.minutes ?: 0).toString()) }
@@ -293,8 +340,8 @@ private fun handover(d: Data) = buildString {
         Text("Status"); Choices(statuses, status) { status = it }; Field(minutes, { minutes = it }, "Zeitaufwand in Minuten", numeric = true)
     }
 }
-@Composable private fun ReadingEditor(assets: List<Asset>, close: () -> Unit, save: (Reading) -> Unit) {
-    var asset by remember { mutableStateOf(assets.firstOrNull()?.id.orEmpty()) }; var label by remember { mutableStateOf("") }
+@Composable private fun ReadingEditor(assets: List<Asset>, initialAssetId: String?, close: () -> Unit, save: (Reading) -> Unit) {
+    var asset by remember { mutableStateOf(initialAssetId ?: assets.firstOrNull()?.id.orEmpty()) }; var label by remember { mutableStateOf("") }
     var value by remember { mutableStateOf("") }; var unit by remember { mutableStateOf("bar") }; var note by remember { mutableStateOf("") }
     Form("Messwert erfassen", asset.isNotEmpty() && label.isNotBlank() && number(value) != null && unit.isNotBlank(), close, {
         save(Reading(assetId = asset, label = label.trim(), value = number(value)!!, unit = unit.trim(), note = note.trim()))
