@@ -1,8 +1,8 @@
 # Abnahme auf Samsung Galaxy S24 Ultra
 
-Status: CI-Build am 29.09.2026 erfolgreich (Run 36547530644). Gerätetests weiterhin offen.
+Status: CI-Build am 29.09.2026 erfolgreich (Version 0.3.0, Run 36580771959). Gerätetests weiterhin offen.
 
-- [x] Workflow: testDebugUnitTest (8 Tests), lintDebug, assembleDebug erfolgreich.
+- [x] Workflow: testDebugUnitTest (29 Tests), lintDebug, assembleDebug und APK-Netzwerkberechtigungsprüfung erfolgreich.
 - [ ] Installieren; Passwort anlegen; Start ohne Internet möglich.
 - [ ] Falsches Passwort entsperrt nicht. Richtiges Passwort stellt Daten wieder her.
 - [ ] App-Wechsel, Home, Bildschirm aus/an und Prozessende sperren die App.

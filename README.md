@@ -4,7 +4,7 @@ Native Android-App in **Kotlin und Jetpack Compose** für den persönlichen Tech
 
 ## Stand 0.3.0 – Testversion, noch keine Gerätefreigabe
 
-Am 29.09.2026 waren Android-Build, acht JVM-Tests und Android-Lint für 0.1.0 erfolgreich. Die neue 0.2.0 erweitert die Tests auf 20; siehe aktuellen Workflow. [Geprüfter Build](https://github.com/sirmebro-sketch/WerkLog/actions/runs/36547530644). Den aktuellen Status zeigt [GitHub Actions](https://github.com/sirmebro-sketch/WerkLog/actions). Ein echter Android-Gerätetest und eine visuelle Abnahme stehen noch aus; dies ist eine Testversion, keine produktionsreife App.
+Am 29.09.2026 waren Android-Build, 29 JVM-Tests, Android-Lint und die Prüfung der APK auf fehlende Internet-/Netzwerkberechtigungen für 0.3.0 erfolgreich. [Geprüfter Build](https://github.com/sirmebro-sketch/WerkLog/actions/runs/36580771959). Ein echter Android-Gerätetest und eine visuelle Abnahme stehen noch aus; dies ist eine Testversion, keine produktionsreife App.
 
 ## Neu in 0.3.0
 
@@ -34,7 +34,7 @@ Testsignaturen können zwischen Builds wechseln: **Vor einer Neuinstallation ein
 - Störungen und Messwerte direkt aus der ausgewählten Anlagenakte erfassen
 - Import älterer 0.1.0-Sicherungen; neuere Sicherungen nicht mit 0.1.0 öffnen
 
-**Test-Update:** Vor einer eventuellen Neuinstallation unbedingt eine verschlüsselte Sicherung erstellen. CI-Testsignaturen können wechseln; bei Neuinstallation werden App-Daten gelöscht. Sicherung und Passwort danach in 0.2.0 wiederherstellen.
+**Test-Update:** Vor einer eventuellen Neuinstallation unbedingt eine verschlüsselte Sicherung erstellen. CI-Testsignaturen können wechseln; bei Neuinstallation werden App-Daten gelöscht. Sicherung und Passwort danach in der neuen Version wiederherstellen.
 
 ## Funktionen
 
