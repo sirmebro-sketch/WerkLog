@@ -414,13 +414,15 @@ private fun java.io.InputStream.readBytesLimited(): ByteArray {
             back = { if (tour > 0) tour-- }, skip = { finishTour() },
             next = { if (tour == tourSteps.lastIndex) finishTour() else tour++ })
         NavigationBar(containerColor = WerkColors.surface) {
-            NavigationBarItem(selected = page == 0, enabled = !model.busy, onClick = { mainPage(0) }, icon = { Icon(Icons.Outlined.Today, "Heute") }, label = { Text("Heute") })
-            NavigationBarItem(selected = page in 1..4, enabled = !model.busy, onClick = { mainPage(4) }, icon = {
+            val navigationColors = NavigationBarItemDefaults.colors(selectedIconColor = Mint, selectedTextColor = Mint,
+                indicatorColor = WerkColors.surfaceVariant, unselectedIconColor = Muted, unselectedTextColor = Muted)
+            NavigationBarItem(selected = page == 0, enabled = !model.busy, onClick = { mainPage(0) }, colors = navigationColors, icon = { Icon(Icons.Outlined.Today, "Heute") }, label = { Text("Heute") })
+            NavigationBarItem(selected = page in 1..4, enabled = !model.busy, onClick = { mainPage(4) }, colors = navigationColors, icon = {
                 Surface(shape = androidx.compose.foundation.shape.CircleShape, color = Mint, modifier = Modifier.size(58.dp)) {
                     Box(contentAlignment = Alignment.Center) { Icon(PowerPlantIcon, "Betrieb", tint = WerkColors.background, modifier = Modifier.size(32.dp)) }
                 }
             }, label = { Text("Betrieb", fontWeight = FontWeight.Bold) })
-            NavigationBarItem(selected = page == 5, enabled = !model.busy, onClick = { mainPage(5) }, icon = { Icon(Icons.Outlined.Settings, "Einstellung") }, label = { Text("Einstellung") })
+            NavigationBarItem(selected = page == 5, enabled = !model.busy, onClick = { mainPage(5) }, colors = navigationColors, icon = { Icon(Icons.Outlined.Settings, "Einstellung") }, label = { Text("Einstellung") })
         }
         }
     }) { padding ->
