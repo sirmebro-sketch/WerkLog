@@ -122,6 +122,7 @@ class ThemeSelectionTest {
             ui.onNodeWithText("Betrieb", useUnmergedTree = true).performClick()
             ui.onNodeWithText("Anleitungen", substring = false).performScrollTo().performClick()
             ui.onNodeWithText("Anleitung öffnen").performScrollTo().performClick()
+            ui.onNodeWithText("Bild anzeigen").performScrollTo().performClick()
             ui.waitUntil(15000) { ui.onAllNodesWithText("Groß öffnen / vergrößern").fetchSemanticsNodes().isNotEmpty() }
             screenshot("anleitung-tageslicht.png", WerkTheme.TAGESLICHT)
             ui.onNodeWithText("Groß öffnen / vergrößern").performScrollTo().performClick()
