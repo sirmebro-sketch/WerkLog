@@ -1,5 +1,7 @@
 package de.werklog.app
 
+import androidx.compose.runtime.saveable.rememberSaveable
+
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -78,8 +80,8 @@ val PowerPlantIcon: ImageVector by lazy {
 
 @Composable internal fun ProfilePanel(d: Data, busy: Boolean, save: (Data) -> Unit, photo: (PhotoTarget) -> Unit) {
     val p = d.profile
-    var editing by remember { mutableStateOf(false) }
-    var deleting by remember { mutableStateOf(false) }
+    var editing by rememberSaveable { mutableStateOf(false) }
+    var deleting by rememberSaveable { mutableStateOf(false) }
     Panel {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             ProfileAvatar(p)
@@ -95,9 +97,9 @@ val PowerPlantIcon: ImageVector by lazy {
         if (p != LocalProfile()) TextButton(onClick = { deleting = true }, enabled = !busy) { Text("Profil löschen") }
     }
     if (editing) {
-        var name by remember { mutableStateOf(p.name) }; var role by remember { mutableStateOf(p.role) }
-        var team by remember { mutableStateOf(p.team) }; var company by remember { mutableStateOf(p.company) }
-        var phone by remember { mutableStateOf(p.phone) }; var email by remember { mutableStateOf(p.email) }
+        var name by rememberSaveable { mutableStateOf(p.name) }; var role by rememberSaveable { mutableStateOf(p.role) }
+        var team by rememberSaveable { mutableStateOf(p.team) }; var company by rememberSaveable { mutableStateOf(p.company) }
+        var phone by rememberSaveable { mutableStateOf(p.phone) }; var email by rememberSaveable { mutableStateOf(p.email) }
         Form("Lokales Profil", name.isNotBlank() && !busy, { editing = false }, {
             save(d.copy(profile = p.copy(name = name.trim(), role = role.trim(), team = team.trim(), company = company.trim(), phone = phone.trim(), email = email.trim()))); editing = false
         }) {

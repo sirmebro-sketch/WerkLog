@@ -10,18 +10,18 @@ val statuses = listOf("Offen", "In Arbeit", "Erledigt")
 val priorities = listOf("Normal", "Wichtig", "Dringend")
 data class Asset(val id: String = newId(), val name: String, val trade: String, val location: String, val note: String,
     val manufacturer: String = "", val model: String = "", val serial: String = "",
-    val contact: String = "", val spareParts: String = "", val nextService: String = "", val tag: String = "", val parentId: String = "", val favorite: Boolean = false, val lastOpened: Long = 0)
+    val contact: String = "", val spareParts: String = "", val nextService: String = "", val tag: String = "", val parentId: String = "", val favorite: Boolean = false, val lastOpened: Long = 0) : java.io.Serializable
 data class Entry(val id: String = newId(), val assetId: String, val title: String, val note: String,
     val priority: String = "Normal", val status: String = "Offen", val created: Long = System.currentTimeMillis(),
-    val updated: Long = created, val minutes: Int = 0)
+    val updated: Long = created, val minutes: Int = 0) : java.io.Serializable
 data class Reading(val id: String = newId(), val assetId: String, val label: String, val value: Double,
-    val unit: String, val note: String, val created: Long = System.currentTimeMillis(), val meterId: String = "", val reset: Boolean = false)
-data class Round(val id: String = newId(), val title: String, val checks: List<String>)
+    val unit: String, val note: String, val created: Long = System.currentTimeMillis(), val meterId: String = "", val reset: Boolean = false) : java.io.Serializable
+data class Round(val id: String = newId(), val title: String, val checks: List<String>) : java.io.Serializable
 data class RoundRun(val id: String = newId(), val title: String, val results: List<String>, val note: String,
-    val created: Long = System.currentTimeMillis())
+    val created: Long = System.currentTimeMillis()) : java.io.Serializable
 data class Data(val assets: List<Asset> = emptyList(), val entries: List<Entry> = emptyList(),
     val readings: List<Reading> = emptyList(), val rounds: List<Round> = emptyList(), val runs: List<RoundRun> = emptyList(),
-    val credentials: List<Credential> = emptyList(), val infos: List<AssetInfo> = emptyList(), val work: WorkData = WorkData(), val profile: LocalProfile = LocalProfile())
+    val credentials: List<Credential> = emptyList(), val infos: List<AssetInfo> = emptyList(), val work: WorkData = WorkData(), val profile: LocalProfile = LocalProfile()) : java.io.Serializable
 fun number(text: String): Double? = text.trim().replace(',', '.').toDoubleOrNull()?.takeIf { it.isFinite() }
 private fun <T> List<T>.json(map: (T) -> JSONObject) = JSONArray().also { a -> forEach { a.put(map(it)) } }
 private fun obj(vararg pairs: Pair<String, Any>) = JSONObject().also { j -> pairs.forEach { j.put(it.first, it.second) } }

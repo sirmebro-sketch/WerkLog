@@ -65,7 +65,10 @@ class NavigationTest {
             ui.waitUntil(10000) { ui.onAllNodesWithText("Passwort", substring = false).fetchSemanticsNodes().isNotEmpty() }
             ui.onNodeWithText("Passwort", substring = false).performTextInput("NeuesPasswort2026")
             ui.onNodeWithText("Entsperren", substring = false).performClick()
-            ui.waitUntil(60000) { ui.onAllNodesWithText("Hallo, Alex Test.").fetchSemanticsNodes().isNotEmpty() }
+            ui.waitUntil(60000) { ui.onAllNodesWithText("Profil bearbeiten").fetchSemanticsNodes().isNotEmpty() }
+            ui.onNodeWithText("Heute", useUnmergedTree = true).performClick()
+            ui.onNodeWithText("Hallo, Alex Test.").assertExists()
+            ui.onAllNodesWithText("Jetzt sichern").assertCountEquals(0)
             ui.onNodeWithText("Betrieb", useUnmergedTree = true).performClick()
             ui.onNodeWithText("Anleitungen", substring = false).performClick()
             ui.onNodeWithText("+ Anleitung").performScrollTo().performClick()
@@ -117,6 +120,26 @@ class NavigationTest {
                 org.junit.Assert.assertTrue(guide.steps.last().image.startsWith("img:"))
             }
 
+            ui.onNodeWithText("+ Nächster Schritt").performClick()
+            ui.onNodeWithText("Schritt *").performTextInput("Unfertiger Prüfschritt")
+            ui.onNodeWithText("Beschreibung / Voraussetzungen / Kontrolle").performTextInput("Notiz bleibt beim Sperren erhalten")
+            scenario.moveToState(androidx.lifecycle.Lifecycle.State.CREATED)
+            org.junit.Assert.assertNull(scenarioModel.data)
+            val checkpoint = File(context.filesDir, "ui-draft.vault")
+            org.junit.Assert.assertTrue(checkpoint.isFile)
+            org.junit.Assert.assertFalse(checkpoint.readText().contains("Unfertiger Prüfschritt"))
+            scenarioModel.workspacePage.intValue = 0; scenarioModel.workspaceTool.value = null
+            scenario.recreate()
+            scenario.moveToState(androidx.lifecycle.Lifecycle.State.RESUMED)
+            ui.waitUntil(10000) { ui.onAllNodesWithText("Passwort", substring = false).fetchSemanticsNodes().isNotEmpty() }
+            ui.onAllNodesWithText("Unfertiger Prüfschritt").assertCountEquals(0)
+            ui.onNodeWithText("Passwort", substring = false).performTextInput("NeuesPasswort2026")
+            ui.onNodeWithText("Entsperren", substring = false).performClick()
+            ui.waitUntil(60000) { ui.onAllNodesWithText("Unfertiger Prüfschritt").fetchSemanticsNodes().isNotEmpty() }
+            ui.onNodeWithText("Notiz bleibt beim Sperren erhalten").assertExists()
+            org.junit.Assert.assertEquals(2, scenarioModel.data!!.work.guides.last().steps.size)
+            ui.onNodeWithText("Speichern").performClick()
+            ui.waitUntil(15000) { !scenarioModel.busy && scenarioModel.data!!.work.guides.last().steps.size == 3 }
             } catch (failure: Throwable) {
                 println("TEST DIAGNOSTIC busy=${diagnosticModel.busy} unlocked=${diagnosticModel.data != null} exists=${diagnosticModel.exists} error=${diagnosticModel.error} page=${diagnosticModel.workspacePage.intValue}")
                 runCatching { println(ui.onRoot().printToString()) }

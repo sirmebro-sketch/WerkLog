@@ -54,6 +54,16 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
         override fun onReceive(context: android.content.Context, intent: Intent) { handoffUntil = 0; backgroundLock?.cancel(); model.lock() }
     }
     private fun beginHandoff() { if (model.data != null) handoffUntil = android.os.SystemClock.elapsedRealtime() + 120_000 }
+    private var unlockVisit = 0
+    private var autoBiometricAttempt: String? = null
+    internal fun requestAutoBiometric() {
+        if (!lifecycle.currentState.isAtLeast(androidx.lifecycle.Lifecycle.State.RESUMED) || model.data != null || !model.exists || model.busy || restoreBytes != null || model.error != null || !biometric.enabled()) return
+        val attempt = "${model.session}:$unlockVisit"
+        if (autoBiometricAttempt == attempt) return
+        autoBiometricAttempt = attempt
+        unlockBiometric()
+    }
+    override fun onResume() { super.onResume(); requestAutoBiometric() }
     private val biometric by lazy { BiometricLock(this) }
     private val notifications = registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted -> if (!granted) model.error = "Benachrichtigungen sind deaktiviert. Termine bleiben im lokalen Kalender sichtbar." }
     fun enableReminders() { if (android.os.Build.VERSION.SDK_INT >= 33) notifications.launch(android.Manifest.permission.POST_NOTIFICATIONS) }
@@ -114,6 +124,7 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
     }
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        importBytes = savedInstanceState?.getString("importFile")?.let { File(cacheDir, File(it).name).takeIf(File::isFile) }
         handoffUntil = savedInstanceState?.getLong("handoffUntil") ?: 0L
         backgroundDeadline = savedInstanceState?.getLong("backgroundDeadline") ?: 0L
         fun restoredFile(key: String): File? = savedInstanceState?.getString(key)?.let { name ->
@@ -137,9 +148,9 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
         File(cacheDir, "shares").listFiles()?.filter { System.currentTimeMillis() - it.lastModified() > 86_400_000 }?.forEach { it.delete() }
         setContent { CompositionLocalProvider(LocalImageLoader provides { value -> model.image(value) }, LocalTransferScope provides { active -> transferScopes = (transferScopes + if (active) 1 else -1).coerceAtLeast(0) }) { MaterialTheme(colorScheme = WerkColors) {
             Surface(Modifier.fillMaxSize(), color = WerkColors.background) {
-                key(model.session) {
+                key("werklog") {
                     if (model.data == null) LockScreen(model, restoreBytes, { restore.launch(arrayOf("*/*")) }, { restoreBytes = null })
-                    else Workspace(model, onExport = {
+                    else SecureWorkspaceState(model) { Workspace(model, onExport = {
                         lifecycleScope.launch {
                             val file = File(cacheDir, "backup-${newId()}.werklog")
                             try { model.backup(file); pendingBackup = file; beginHandoff(); export.launch("WerkLog-${java.time.LocalDate.now()}.werklog") }
@@ -154,6 +165,7 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
                     }
                     if (model.data != null && importBytes != null) ImportAssetDialog(importBytes!!, model.data!!, model.busy, { importBytes?.delete(); importBytes = null }) { incoming, target, replace -> model.importShare(incoming, target, replace) }
                 }
+                }
                 sourceTarget?.let { target -> AlertDialog(onDismissRequest = { sourceTarget = null }, title = { Text("Bild hinzufügen") },
                     text = { Text("Das Bild wird verkleinert und verschlüsselt gespeichert. Bei Galerieauswahl bleibt das Original in deiner Galerie unverändert.") },
                     confirmButton = { TextButton(onClick = { sourceTarget = null; takePhoto(target) }) { Text("Kamera") } },
@@ -164,7 +176,7 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
         } } }
     }
     override fun onStop() {
-        super.onStop(); sourceTarget = null
+        super.onStop(); model.checkpointDraft(); sourceTarget = null
         if (isChangingConfigurations) return
         val now = android.os.SystemClock.elapsedRealtime()
         val deviceLocked = getSystemService(android.app.KeyguardManager::class.java).isDeviceLocked
@@ -175,11 +187,13 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
         } else { backgroundDeadline = 0; handoffUntil = 0; model.lock() }
     }
     override fun onStart() {
-        super.onStart()
+        super.onStart(); unlockVisit++
         if (backgroundDeadline > 0 && android.os.SystemClock.elapsedRealtime() >= backgroundDeadline) model.lock()
         backgroundLock?.cancel(); backgroundDeadline = 0
     }
     override fun onSaveInstanceState(outState: Bundle) {
+        model.checkpointDraft()
+        importBytes?.let { outState.putString("importFile", it.name) }
         outState.putLong("handoffUntil", handoffUntil)
         outState.putLong("backgroundDeadline", backgroundDeadline)
         val target = readyPhoto?.second ?: photoTarget
@@ -263,6 +277,8 @@ private fun java.io.InputStream.readBytesLimited(): ByteArray {
     var password by remember { mutableStateOf("") }; var repeat by remember { mutableStateOf("") }
     var confirmed by remember(backup) { mutableStateOf(false) }
     val creating = !model.exists && backup == null
+    val lockActivity = androidx.compose.ui.platform.LocalContext.current as MainActivity
+    LaunchedEffect(model.session, backup, model.busy, model.error) { if (!creating) lockActivity.requestAutoBiometric() }
     Column(Modifier.fillMaxSize().safeDrawingPadding().verticalScroll(rememberScrollState()).padding(28.dp), verticalArrangement = Arrangement.Center) {
         Text("W /", color = Mint, fontSize = 58.sp, fontWeight = FontWeight.Black)
         Spacer(Modifier.height(24.dp)); Text("WerkLog", fontSize = 38.sp, fontWeight = FontWeight.Bold)
@@ -295,27 +311,27 @@ private fun java.io.InputStream.readBytesLimited(): ByteArray {
     val d = model.data ?: return
     var tool by model.workspaceTool
     var page by model.workspacePage
-    var dialog by remember { mutableStateOf<String?>(null) }
-    var selectedAssetId by remember { mutableStateOf<String?>(null) }
-    var preselectedAssetId by remember { mutableStateOf<String?>(null) }
-    var editAsset by remember { mutableStateOf<Asset?>(null) }
-    var editEntry by remember { mutableStateOf<Entry?>(null) }
-    var editReading by remember { mutableStateOf<Reading?>(null) }
-    var editRound by remember { mutableStateOf<Round?>(null) }
-    var removal by remember { mutableStateOf<Pair<String, String>?>(null) }
-    var run by remember { mutableStateOf<Round?>(null) }
-    var mail by remember { mutableStateOf<Pair<String, String>?>(null) }
+    var dialog by rememberSaveable { mutableStateOf<String?>(null) }
+    var selectedAssetId by rememberSaveable { mutableStateOf<String?>(null) }
+    var preselectedAssetId by rememberSaveable { mutableStateOf<String?>(null) }
+    var editAsset by rememberSaveable { mutableStateOf<Asset?>(null) }
+    var editEntry by rememberSaveable { mutableStateOf<Entry?>(null) }
+    var editReading by rememberSaveable { mutableStateOf<Reading?>(null) }
+    var editRound by rememberSaveable { mutableStateOf<Round?>(null) }
+    var removal by rememberSaveable { mutableStateOf<Pair<String, String>?>(null) }
+    var run by rememberSaveable { mutableStateOf<Round?>(null) }
+    var mail by rememberSaveable { mutableStateOf<Pair<String, String>?>(null) }
     var nextGuideStep by remember { mutableStateOf<(() -> Unit)?>(null) }
     BackHandler(enabled = page == 4 && tool != null) { tool = null }
     BackHandler(enabled = page == 1 && selectedAssetId != null && dialog == null) { selectedAssetId = null }
     LaunchedEffect(requestedAsset) { requestedAsset?.let { selectedAssetId = it; page = 1; tool = null; assetOpened() } }
-    val titles = listOf("Heute", "Anlagen", "Journal", "Rundgang", "Betrieb", "Einstellung")
+    val titles = listOf("Heute", "Anlagen", "Arbeitsprotokoll", "Rundgang", "Betrieb", "Einstellung")
     val context = androidx.compose.ui.platform.LocalContext.current
     val tourPrefs = context.getSharedPreferences("onboarding", 0)
-    var tour by remember { mutableIntStateOf(if (tourPrefs.getBoolean("done-v1", false)) -1 else 0) }
+    var tour by rememberSaveable { mutableIntStateOf(if (tourPrefs.getBoolean("done-v1", false)) -1 else 0) }
     BackHandler(enabled = page != 0 && dialog == null && selectedAssetId == null && tool == null) { page = if (page in 1..3) 4 else 0 }
     val activity = context as MainActivity
-    var biometricPromptRunning by remember { mutableStateOf(false) }
+    var biometricPromptRunning by rememberSaveable { mutableStateOf(false) }
     val tourVisible = tour >= 0 && !model.offerBiometric && !biometricPromptRunning && model.error == null
     val tourSteps = listOf(
         Triple(0, "Heute", "Hier siehst du Termine und offene Arbeiten für deinen Tag."),
@@ -352,7 +368,11 @@ private fun java.io.InputStream.readBytesLimited(): ByteArray {
         }
     }) { padding ->
         val scroll = rememberScrollState()
-        LaunchedEffect(page, tool, selectedAssetId) { scroll.scrollTo(0) }
+        var lastScrollPage by rememberSaveable { mutableStateOf("$page:$tool:$selectedAssetId") }
+        LaunchedEffect(page, tool, selectedAssetId) {
+            val current = "$page:$tool:$selectedAssetId"
+            if (current != lastScrollPage) { scroll.scrollTo(0); lastScrollPage = current }
+        }
         Column(Modifier.fillMaxSize().padding(padding).consumeWindowInsets(padding).verticalScroll(scroll).padding(horizontal = 20.dp)) {
             if (model.busy) LinearProgressIndicator(Modifier.fillMaxWidth())
             when (page) {
@@ -376,9 +396,6 @@ private fun java.io.InputStream.readBytesLimited(): ByteArray {
                         OutlinedButton(onClick = { page = 4; tool = "Bestellungen" }, modifier = Modifier.weight(1f)) { Text("Teil anfordern") }
                     }
                     OutlinedButton(onClick = { page = 1 }, modifier = Modifier.fillMaxWidth()) { Text("Anlagenwissen nachschlagen") }
-                    val context = androidx.compose.ui.platform.LocalContext.current
-                    val lastBackup = context.getSharedPreferences("backup", 0).getLong("lastBackup", 0)
-                    if (System.currentTimeMillis() - lastBackup > 7L * 86400000) Panel { Text("Sicherung fällig", color = Amber); Hint("Seit mindestens 7 Tagen keine vollständige Sicherung exportiert."); TextButton(onClick = onExport, enabled = !model.busy) { Text("Jetzt sichern") } }
                     if (d.assets.isEmpty()) Empty("Dein Arbeitsplatz, deine Struktur", "Lege zuerst eine Anlage an. Danach kannst du Störungen und Messwerte direkt zuordnen.") { editAsset = null; dialog = "asset" }
                     val due = d.assets.filter { serviceState(it.nextService) in listOf("Überfällig", "Heute fällig", "In den nächsten 30 Tagen") }.sortedBy { parseServiceDate(it.nextService) }
                     if (due.isNotEmpty()) {
@@ -408,7 +425,7 @@ private fun java.io.InputStream.readBytesLimited(): ByteArray {
                             { editReading = null; preselectedAssetId = selected.id; dialog = "reading" },
                             { e -> editEntry = e; dialog = "entry" }, onShareFile)
                     } else {
-                        var query by remember { mutableStateOf("") }
+                        var query by rememberSaveable { mutableStateOf("") }
                         Field(query, { query = it }, "Anlagen, Kennzeichen, Wissen und Anleitungen suchen")
                         OutlinedButton(onClick = { onPhoto(PhotoTarget("asset", "")) }, enabled = !model.busy) { Text("Anlagen-Code fotografieren") }
                         Button(onClick = { editAsset = null; dialog = "asset" }, enabled = !model.busy) { Text("+ Anlage anlegen") }
@@ -424,9 +441,10 @@ private fun java.io.InputStream.readBytesLimited(): ByteArray {
                     }
                 }
                 2 -> {
-                    var query by remember { mutableStateOf("") }; var filter by remember { mutableStateOf("Alle") }; var kind by remember { mutableStateOf("Störungen") }
+                    Hint("Was ist passiert, was wurde gemacht, was ist noch offen? Hier dokumentierst du Störungen und Arbeiten an deinen Anlagen.")
+                    var query by rememberSaveable { mutableStateOf("") }; var filter by rememberSaveable { mutableStateOf("Alle") }; var kind by rememberSaveable { mutableStateOf("Störungen") }
                     Choices(listOf("Störungen", "Messwerte"), kind) { kind = it }
-                    Field(query, { query = it }, "Journal durchsuchen")
+                    Field(query, { query = it }, "Arbeitsprotokoll durchsuchen")
                     if (kind == "Störungen") {
                         Choices(listOf("Alle") + statuses, filter) { filter = it }
                         Button(onClick = { editEntry = null; preselectedAssetId = null; dialog = "entry" }, enabled = d.assets.isNotEmpty() && !model.busy) { Text("+ Eintrag") }
@@ -463,12 +481,14 @@ private fun java.io.InputStream.readBytesLimited(): ByteArray {
                     if (tool != null) CompositionLocalProvider(LocalGuideStepAction provides { nextGuideStep = it }) { WorkTools(tool!!, d, model.busy, { tool = null }, { model.update(it) }, onPhoto, onOrder) }
                     else OperationTiles { label -> when (label) {
                         "Anlagen" -> { page = 1; selectedAssetId = null }
-                        "Journal" -> page = 2
+                        "Arbeitsprotokoll" -> page = 2
                         "Rundgang" -> page = 3
                         else -> tool = label
                     } }
                 }
                 5 -> {
+                    val lastBackup = context.getSharedPreferences("backup", 0).getLong("lastBackup", 0)
+                    if (System.currentTimeMillis() - lastBackup > 7L * 86400000) Hint("Sicherung fällig: Seit mindestens sieben Tagen keine vollständige Sicherung exportiert.")
                     ProfilePanel(d, model.busy, { model.update(it) }, onPhoto)
                     Panel { Text("Dein Datentresor", fontSize = 23.sp, fontWeight = FontWeight.Bold)
                         Text("Lokal verschlüsselt · Ohne Internetberechtigung", color = Mint)
@@ -486,7 +506,7 @@ private fun java.io.InputStream.readBytesLimited(): ByteArray {
                     Hint("WerkLog dokumentiert Beobachtungen und Tätigkeiten. Freigaben, Betriebsanweisungen und eure offiziellen Meldewege bleiben maßgeblich. Keine Anlagensteuerung oder Verbindung zur GLT.")
                     OutlinedButton(onClick = { dialog = "password" }, enabled = !model.busy, modifier = Modifier.fillMaxWidth()) { Text("App-Passwort ändern") }
                     OutlinedButton(onClick = { tour = 0; page = 0 }, modifier = Modifier.fillMaxWidth()) { Text("Kurze App-Führung starten") }
-                    Text("WERKLOG 0.4.2 · KOTLIN / ANDROID", color = Muted, fontSize = 11.sp)
+                    Text("WERKLOG 0.4.3 · KOTLIN / ANDROID", color = Muted, fontSize = 11.sp)
                 }
             }
             Spacer(Modifier.height(24.dp))
@@ -546,7 +566,7 @@ private fun java.io.InputStream.readBytesLimited(): ByteArray {
     FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) { options.forEach { FilterChip(selected == it, { change(it) }, label = { Text(it) }) } }
 }
 @Composable internal fun Picker(label: String, values: List<Pair<String, String>>, selected: String, change: (String) -> Unit) {
-    var expanded by remember { mutableStateOf(false) }
+    var expanded by rememberSaveable { mutableStateOf(false) }
     Box { OutlinedButton(onClick = { expanded = true }, modifier = Modifier.fillMaxWidth()) { Text("$label: ${values.find { it.first == selected }?.second ?: "Auswählen"}") }
         DropdownMenu(expanded, { expanded = false }) { values.forEach { v -> DropdownMenuItem(text = { Text(v.second) }, onClick = { change(v.first); expanded = false }) } }
     }
@@ -556,10 +576,10 @@ private fun java.io.InputStream.readBytesLimited(): ByteArray {
         confirmButton = { TextButton(onClick = save, enabled = valid) { Text(confirmLabel) } }, dismissButton = { TextButton(onClick = close) { Text("Abbrechen") } })
 }
 @Composable private fun EntryEditor(existing: Entry?, assets: List<Asset>, templates: List<EntryTemplate>, initialAssetId: String?, close: () -> Unit, delete: () -> Unit, order: (Entry) -> Unit, appointment: (Entry) -> Unit, save: (Entry) -> Unit) {
-    var asset by remember { mutableStateOf(existing?.assetId ?: initialAssetId ?: assets.firstOrNull()?.id.orEmpty()) }
-    var title by remember { mutableStateOf(existing?.title ?: "") }; var note by remember { mutableStateOf(existing?.note ?: "") }
-    var priority by remember { mutableStateOf(existing?.priority ?: "Normal") }; var status by remember { mutableStateOf(existing?.status ?: "Offen") }
-    var minutes by remember { mutableStateOf((existing?.minutes ?: 0).toString()) }
+    var asset by rememberSaveable { mutableStateOf(existing?.assetId ?: initialAssetId ?: assets.firstOrNull()?.id.orEmpty()) }
+    var title by rememberSaveable { mutableStateOf(existing?.title ?: "") }; var note by rememberSaveable { mutableStateOf(existing?.note ?: "") }
+    var priority by rememberSaveable { mutableStateOf(existing?.priority ?: "Normal") }; var status by rememberSaveable { mutableStateOf(existing?.status ?: "Offen") }
+    var minutes by rememberSaveable { mutableStateOf((existing?.minutes ?: 0).toString()) }
     Form("Störung / Tätigkeit", title.isNotBlank() && asset.isNotEmpty() && (minutes.toIntOrNull()?.let { it >= 0 } == true), close, {
         save(Entry(existing?.id ?: newId(), asset, title.trim(), note.trim(), priority, status, existing?.created ?: System.currentTimeMillis(), System.currentTimeMillis(), minutes.toInt()))
     }) {
@@ -576,15 +596,15 @@ private fun java.io.InputStream.readBytesLimited(): ByteArray {
     }
 }
 @Composable private fun ReadingEditor(existing: Reading?, assets: List<Asset>, initialAssetId: String?, close: () -> Unit, save: (Reading) -> Unit) {
-    var asset by remember { mutableStateOf(existing?.assetId ?: initialAssetId ?: assets.firstOrNull()?.id.orEmpty()) }; var label by remember { mutableStateOf(existing?.label ?: "") }
-    var value by remember { mutableStateOf(existing?.value?.toString() ?: "") }; var unit by remember { mutableStateOf(existing?.unit ?: "bar") }; var note by remember { mutableStateOf(existing?.note ?: "") }
+    var asset by rememberSaveable { mutableStateOf(existing?.assetId ?: initialAssetId ?: assets.firstOrNull()?.id.orEmpty()) }; var label by rememberSaveable { mutableStateOf(existing?.label ?: "") }
+    var value by rememberSaveable { mutableStateOf(existing?.value?.toString() ?: "") }; var unit by rememberSaveable { mutableStateOf(existing?.unit ?: "bar") }; var note by rememberSaveable { mutableStateOf(existing?.note ?: "") }
     Form("Messwert erfassen", asset.isNotEmpty() && label.isNotBlank() && number(value) != null && unit.isNotBlank(), close, {
         save(if (existing == null) Reading(assetId = asset, label = label.trim(), value = number(value)!!, unit = unit.trim(), note = note.trim()) else existing.copy(value = number(value)!!, note = note.trim()))
     }) { if (existing == null) { Picker("Anlage", assets.map { it.id to it.name }, asset) { asset = it }; Field(label, { label = it }, "Messpunkt *") } else Text("${existing.label} · ${existing.unit} · ursprünglicher Zeitpunkt bleibt erhalten")
         Field(value, { value = it }, "Messwert *", numeric = true); if (existing == null) Field(unit, { unit = it }, "Einheit *"); Field(note, { note = it }, "Beobachtung", 2) }
 }
 @Composable private fun RoundEditor(existing: Round?, close: () -> Unit, save: (Round) -> Unit) {
-    var title by remember { mutableStateOf(existing?.title ?: "") }; var points by remember { mutableStateOf(existing?.checks?.joinToString("\n") ?: "") }
+    var title by rememberSaveable { mutableStateOf(existing?.title ?: "") }; var points by rememberSaveable { mutableStateOf(existing?.checks?.joinToString("\n") ?: "") }
     val checks = points.lines().map { it.trim() }.filter { it.isNotEmpty() }
     Form("Checkliste erstellen", title.isNotBlank() && checks.size in 1..100, close, { save(Round(id = existing?.id ?: newId(), title = title.trim(), checks = checks)) }) {
         Field(title, { title = it }, "Name *"); Field(points, { points = it }, "Ein Prüfpunkt pro Zeile *", 6)
@@ -592,12 +612,12 @@ private fun java.io.InputStream.readBytesLimited(): ByteArray {
     }
 }
 @Composable private fun RoundRunner(round: Round, close: () -> Unit, save: (RoundRun) -> Unit) {
-    var results by remember { mutableStateOf(List(round.checks.size) { "Ungeprüft" }) }; var note by remember { mutableStateOf("") }
+    var results by rememberSaveable { mutableStateOf(List(round.checks.size) { "Ungeprüft" }) }; var note by rememberSaveable { mutableStateOf("") }
     Form(round.title, results.any { it != "Ungeprüft" } && (!results.contains("Auffällig") || note.isNotBlank()), close, {
         save(RoundRun(title = round.title, results = round.checks.mapIndexed { i, check -> "${results[i]} · $check" }, note = note.trim()))
     }) { round.checks.forEachIndexed { i, text -> Text(text, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 12.dp))
         Choices(listOf("Ungeprüft", "In Ordnung", "Auffällig"), results[i]) { v -> results = results.toMutableList().also { it[i] = v } }
     }; Field(note, { note = it }, if (results.contains("Auffällig")) "Auffälligkeit / Maßnahme *" else "Notiz", 3)
-        Hint("Auffälligkeiten lösen keine automatische Störungsmeldung aus. Falls nötig, zusätzlich im Journal erfassen.")
+        Hint("Auffälligkeiten lösen keine automatische Störungsmeldung aus. Falls nötig, zusätzlich im Arbeitsprotokoll erfassen.")
     }
 }

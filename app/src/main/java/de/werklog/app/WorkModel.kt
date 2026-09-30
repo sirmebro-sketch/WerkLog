@@ -26,7 +26,40 @@ class WorkModel(app: Application) : AndroidViewModel(app) {
     var session by mutableStateOf(0); private set
     var offerBiometric by mutableStateOf(false); private set
     fun dismissBiometricOffer() { offerBiometric = false }
-    fun lock() { workspacePage.intValue = 0; workspaceTool.value = null; generation++; key?.fill(0); key = null; salt = null; data = null; session++ }
+    private var lastDraftHash: ByteArray? = null
+    internal var draftRegistry: androidx.compose.runtime.saveable.SaveableStateRegistry? = null
+    private val draftFile get() = File(getApplication<Application>().filesDir, "ui-draft.vault")
+    internal fun checkpointDraft(state: Map<String, List<Any?>>? = null) {
+        val k = key ?: return; val s = salt ?: return
+        var raw: ByteArray? = null
+        try {
+            val values = state ?: draftRegistry?.performSave() ?: return
+            raw = DraftState.encode(values, workspacePage.intValue, workspaceTool.value)
+            val digest = java.security.MessageDigest.getInstance("SHA-256").digest(s + raw)
+            if (draftFile.exists() && lastDraftHash?.contentEquals(digest) == true) return
+            val encrypted = Vault.encrypt(raw, k, s)
+            val atomic = AtomicFile(draftFile); val stream = atomic.startWrite()
+            try { stream.write(encrypted); atomic.finishWrite(stream); lastDraftHash = digest } catch (e: Exception) { atomic.failWrite(stream); throw e }
+        } catch (_: Exception) { error = "Der aktuelle Entwurf konnte nicht zwischengespeichert werden. Bitte freien Speicher prüfen." }
+        finally { raw?.fill(0) }
+    }
+    internal fun restoreDraftState(): Map<String, List<Any?>>? {
+        val k = key ?: return null
+        if (!draftFile.exists()) return null
+        var raw: ByteArray? = null
+        return try {
+            raw = Vault.decrypt(draftFile.readBounded(Vault.MAX_BYTES), k)
+            val restored = DraftState.decode(raw)
+            workspacePage.intValue = restored.first; workspaceTool.value = restored.second
+            restored.third
+        } catch (_: Exception) {
+            // Preserve the encrypted original for recovery rather than overwriting it with an empty form.
+            draftFile.renameTo(File(draftFile.parentFile, "ui-draft-recovery-${System.currentTimeMillis()}.vault"))
+            error = "Der letzte Entwurf konnte nicht wiederhergestellt werden. Die verschlüsselte Entwurfsdatei wurde zur Wiederherstellung aufbewahrt."
+            null
+        } finally { raw?.fill(0) }
+    }
+    fun lock() { checkpointDraft(); draftRegistry = null; lastDraftHash = null; generation++; key?.fill(0); key = null; salt = null; data = null; session++ }
     fun unlock(password: CharArray, backup: File? = null) {
         if (busy) { password.fill('\u0000'); return }
         busy = true; error = null
@@ -36,7 +69,7 @@ class WorkModel(app: Application) : AndroidViewModel(app) {
             var derived: ByteArray? = null
             try {
                 val result = withContext(Dispatchers.IO) {
-                    if (backup != null) return@withContext repository.restore(backup, password).also { derived = it.second }
+                    if (backup != null) return@withContext repository.restore(backup, password).also { derived = it.second; draftFile.delete(); workspacePage.intValue = 0; workspaceTool.value = null }
                     val bytes = if (exists) repository.envelope() else null
                     val s = bytes?.let(Vault::saltOf) ?: Vault.salt()
                     val k = Vault.key(password, s); derived = k
@@ -125,7 +158,15 @@ class WorkModel(app: Application) : AndroidViewModel(app) {
                 getApplication<Application>().getSharedPreferences("backup", 0).edit().putLong("lastBackup", 0).apply()
                 getApplication<Application>().getSharedPreferences("biometric", 0).edit().clear().apply()
                 java.security.KeyStore.getInstance("AndroidKeyStore").apply { load(null); deleteEntry("werklog-biometric-v1") }
-                if (attempt == generation) { key?.fill(0); key = changed.second; resultKey = null; salt = changed.first; data = changed.third }
+                if (attempt == generation) { key?.fill(0); key = changed.second; resultKey = null; salt = changed.first; data = changed.third; checkpointDraft() }
+                else if (draftFile.exists()) {
+                    val rawDraft = Vault.decrypt(draftFile.readBounded(Vault.MAX_BYTES), currentKey)
+                    try {
+                        val atomic = AtomicFile(draftFile); val stream = atomic.startWrite()
+                        try { stream.write(Vault.encrypt(rawDraft, changed.second, changed.first)); atomic.finishWrite(stream) }
+                        catch (e: Exception) { atomic.failWrite(stream); throw e }
+                    } finally { rawDraft.fill(0) }
+                }
                 error = "Passwort geändert. Bitte neue Sicherung erstellen; ältere Sicherungen behalten ihr bisheriges Passwort."
             } catch (_: Exception) { error = "Passwortwechsel fehlgeschlagen. Aktuelles Passwort und freien Speicher prüfen." }
             finally { resultKey?.fill(0); currentKey.fill(0); oldPassword.fill('\u0000'); nextPassword.fill('\u0000'); busy = false }

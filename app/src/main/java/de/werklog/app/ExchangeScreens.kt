@@ -5,6 +5,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -19,10 +20,10 @@ val LocalTransferScope = staticCompositionLocalOf<(Boolean) -> Unit> { {} }
 @Composable internal fun ExportAssetDialog(data: Data, asset: Asset, info: AssetInfo?, close: () -> Unit, share: (java.io.File) -> Unit) {
     val transferScope = LocalTransferScope.current
     DisposableEffect(Unit) { transferScope(true); onDispose { transferScope(false) } }
-    var history by remember { mutableStateOf(false) }; var credentials by remember { mutableStateOf(false) }
+    var history by rememberSaveable { mutableStateOf(false) }; var credentials by rememberSaveable { mutableStateOf(false) }
     var working by remember { mutableStateOf(false) }; var error by remember { mutableStateOf<String?>(null) }
-    var code by remember { mutableStateOf<String?>(null) }; var encrypted by remember { mutableStateOf<java.io.File?>(null) }
-    var noted by remember { mutableStateOf(false) }
+    var code by rememberSaveable { mutableStateOf<String?>(null) }; var encrypted by rememberSaveable { mutableStateOf<java.io.File?>(null) }
+    var noted by rememberSaveable { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
     val loadImage = LocalImageLoader.current
     val context = androidx.compose.ui.platform.LocalContext.current
@@ -64,17 +65,26 @@ val LocalTransferScope = staticCompositionLocalOf<(Boolean) -> Unit> { {} }
 @Composable internal fun ImportAssetDialog(file: java.io.File, current: Data, busy: Boolean, close: () -> Unit, save: (OpenShare, String?, Boolean) -> Unit) {
     val transferScope = LocalTransferScope.current
     DisposableEffect(Unit) { transferScope(true); onDispose { transferScope(false) } }
-    var code by remember { mutableStateOf("") }; var opened by remember { mutableStateOf<OpenShare?>(null) }
+    var code by rememberSaveable { mutableStateOf("") }; var opened by remember { mutableStateOf<OpenShare?>(null) }
+    var resumePreview by rememberSaveable { mutableStateOf(false) }
     val incoming = opened?.data
     val loadLocalImage = LocalImageLoader.current
     var comparison by remember { mutableStateOf<ImportChanges?>(null) }
     var comparing by remember { mutableStateOf(false) }
-    var target by remember { mutableStateOf("") }; var replace by remember { mutableStateOf(false) }
+    var target by rememberSaveable { mutableStateOf("") }; var replace by rememberSaveable { mutableStateOf(false) }
     var handedOff by remember { mutableStateOf(false) }
     val context = androidx.compose.ui.platform.LocalContext.current
     DisposableEffect(Unit) { onDispose { if (!handedOff) opened?.close() } }
     var error by remember { mutableStateOf<String?>(null) }; var working by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
+    LaunchedEffect(file.path) {
+        if (resumePreview && code.isNotBlank() && opened == null) {
+            working = true
+            try { opened = withContext(Dispatchers.IO) { ShareArchive.open(file, code, context.cacheDir) } }
+            catch (_: Exception) { error = "Freigabe bitte erneut entschlüsseln."; resumePreview = false }
+            finally { working = false }
+        }
+    }
     LaunchedEffect(target, opened) {
         comparison = null
         if (target.isNotEmpty() && opened != null) {
@@ -125,8 +135,8 @@ val LocalTransferScope = staticCompositionLocalOf<(Boolean) -> Unit> { {} }
         confirmButton = { TextButton(enabled = !busy && !working && !comparing && (target.isEmpty() || comparison != null) && (incoming != null || code.isNotBlank()), onClick = {
             val ready = incoming
             if (ready != null) { handedOff = true; save(opened!!, target.takeIf { it.isNotEmpty() }, replace); close() }
-            else { working = true; error = null; val submittedCode = code; code = ""
-                scope.launch { try { opened = withContext(Dispatchers.IO) { ShareArchive.open(file, submittedCode, context.cacheDir) } }
+            else { working = true; error = null; val submittedCode = code
+                scope.launch { try { opened = withContext(Dispatchers.IO) { ShareArchive.open(file, submittedCode, context.cacheDir) }; resumePreview = true }
                     catch (_: Exception) { error = "Code falsch, Datei beschädigt oder Format nicht unterstützt. Es wurde nichts importiert." }
                     finally { working = false } }
             }

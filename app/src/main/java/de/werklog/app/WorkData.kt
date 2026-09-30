@@ -7,16 +7,16 @@ import java.time.format.DateTimeFormatter
 import java.time.format.ResolverStyle
 import java.util.Base64
 
-data class Meter(val id: String = newId(), val assetId: String, val name: String, val unit: String, val note: String = "", val maxDelta: Double? = null)
+data class Meter(val id: String = newId(), val assetId: String, val name: String, val unit: String, val note: String = "", val maxDelta: Double? = null) : java.io.Serializable
 data class Appointment(val id: String = newId(), val title: String, val start: String, val minutes: Int = 60,
-    val company: String = "", val contact: String = "", val responsible: String = "", val assetId: String = "", val note: String = "", val status: String = "Geplant", val repeat: String = "Nie", val remind: Int = -1)
-data class GuideStep(val id: String = newId(), val title: String, val body: String, val image: String = "")
-data class Guide(val id: String = newId(), val title: String, val assetId: String = "", val steps: List<GuideStep> = emptyList(), val revision: Int = 1, val checked: String = "")
-data class OrderItem(val id: String = newId(), val name: String, val quantity: String, val unit: String = "Stück", val reason: String = "", val assetId: String = "", val image: String = "")
-data class PartsOrder(val id: String = newId(), val title: String, val recipient: String = "", val items: List<OrderItem> = emptyList(), val completed: Boolean = false, val status: String = "Entwurf", val delivery: String = "", val entryId: String = "")
-data class WorkData(val meters: List<Meter> = emptyList(), val appointments: List<Appointment> = emptyList(), val guides: List<Guide> = emptyList(), val orders: List<PartsOrder> = emptyList(), val templates: List<EntryTemplate> = emptyList(), val lastMeter: String = "")
-data class EntryTemplate(val id: String = newId(), val name: String, val title: String, val body: String, val trade: String = "Alle")
-data class PhotoTarget(val kind: String, val id: String)
+    val company: String = "", val contact: String = "", val responsible: String = "", val assetId: String = "", val note: String = "", val status: String = "Geplant", val repeat: String = "Nie", val remind: Int = -1) : java.io.Serializable
+data class GuideStep(val id: String = newId(), val title: String, val body: String, val image: String = "") : java.io.Serializable
+data class Guide(val id: String = newId(), val title: String, val assetId: String = "", val steps: List<GuideStep> = emptyList(), val revision: Int = 1, val checked: String = "") : java.io.Serializable
+data class OrderItem(val id: String = newId(), val name: String, val quantity: String, val unit: String = "Stück", val reason: String = "", val assetId: String = "", val image: String = "") : java.io.Serializable
+data class PartsOrder(val id: String = newId(), val title: String, val recipient: String = "", val items: List<OrderItem> = emptyList(), val completed: Boolean = false, val status: String = "Entwurf", val delivery: String = "", val entryId: String = "") : java.io.Serializable
+data class WorkData(val meters: List<Meter> = emptyList(), val appointments: List<Appointment> = emptyList(), val guides: List<Guide> = emptyList(), val orders: List<PartsOrder> = emptyList(), val templates: List<EntryTemplate> = emptyList(), val lastMeter: String = "") : java.io.Serializable
+data class EntryTemplate(val id: String = newId(), val name: String, val title: String, val body: String, val trade: String = "Alle") : java.io.Serializable
+data class PhotoTarget(val kind: String, val id: String) : java.io.Serializable
 const val MAX_IMAGE_BYTES = 512 * 1024
 const val MAX_IMAGES = 500
 private val appointmentFormat = DateTimeFormatter.ofPattern("dd.MM.uuuu HH:mm").withResolverStyle(ResolverStyle.STRICT)

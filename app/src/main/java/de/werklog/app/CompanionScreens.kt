@@ -1,5 +1,7 @@
 package de.werklog.app
 
+import androidx.compose.runtime.saveable.rememberSaveable
+
 import androidx.compose.material.icons.outlined.*
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.*
@@ -24,9 +26,9 @@ import androidx.compose.ui.unit.dp
     Text("${points.minOf { it.value }} – ${points.maxOf { it.value }} ${points.last().unit} · Orange = Zählerwechsel", color = Muted)
 }
 @Composable fun TemplateScreen(d: Data, busy: Boolean, save: (Data) -> Unit) {
-    var editing by remember { mutableStateOf(false) }; var selected by remember { mutableStateOf<EntryTemplate?>(null) }
-    Section("Eigene Tätigkeitsvorlagen")
-    Hint("Vorlagen füllen neue Journal-Einträge. Alle Angaben bleiben vor dem Speichern bearbeitbar.")
+    var editing by rememberSaveable { mutableStateOf(false) }; var selected by rememberSaveable { mutableStateOf<EntryTemplate?>(null) }
+    Section("Textvorlagen für Arbeiten")
+    Hint("Wiederverwendbare Texte für ähnliche Arbeiten – zum Beispiel eine Pumpenkontrolle. Wähle sie beim Anlegen eines Protokolleintrags aus und ergänze deinen Befund.")
     Button(onClick = { selected = null; editing = true }, enabled = !busy) { Text("+ Vorlage") }
     (starterTemplates + d.work.templates).forEach { t -> Panel {
         Text(t.name); Text(t.body)
@@ -34,7 +36,7 @@ import androidx.compose.ui.unit.dp
         if (t !in starterTemplates) TextButton(onClick = { save(d.copy(work = d.work.copy(templates = d.work.templates.filterNot { it.id == t.id }))) }, enabled = !busy) { Text("Vorlage entfernen") }
     } }
     if (editing) {
-        var name by remember { mutableStateOf(selected?.name ?: "") }; var title by remember { mutableStateOf(selected?.title ?: "") }; var body by remember { mutableStateOf(selected?.body ?: "") }
+        var name by rememberSaveable { mutableStateOf(selected?.name ?: "") }; var title by rememberSaveable { mutableStateOf(selected?.title ?: "") }; var body by rememberSaveable { mutableStateOf(selected?.body ?: "") }
         Form("Vorlage", name.isNotBlank() && title.isNotBlank() && !busy, { editing = false }, {
             val t = EntryTemplate(selected?.id ?: newId(), name.trim(), title.trim(), body)
             save(d.copy(work = d.work.copy(templates = d.work.templates.filterNot { it.id == t.id } + t))); editing = false
@@ -45,23 +47,24 @@ import androidx.compose.ui.unit.dp
 @Composable fun OperationTiles(open: (String) -> Unit) {
     val tiles = listOf(
         "Anlagen" to androidx.compose.material.icons.Icons.Outlined.PrecisionManufacturing,
-        "Journal" to androidx.compose.material.icons.Icons.Outlined.Assignment,
+        "Arbeitsprotokoll" to androidx.compose.material.icons.Icons.Outlined.Assignment,
         "Zähler" to androidx.compose.material.icons.Icons.Outlined.Speed,
         "Rundgang" to androidx.compose.material.icons.Icons.Outlined.Checklist,
         "Kalender" to androidx.compose.material.icons.Icons.Outlined.CalendarMonth,
         "Anleitungen" to androidx.compose.material.icons.Icons.Outlined.MenuBook,
         "Bestellungen" to androidx.compose.material.icons.Icons.Outlined.ShoppingCart,
-        "Vorlagen" to androidx.compose.material.icons.Icons.Outlined.ContentCopy)
+        "Textvorlagen" to androidx.compose.material.icons.Icons.Outlined.ContentCopy)
     tiles.chunked(2).forEach { row -> Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
         row.forEach { (name, icon) -> Card(onClick = { open(name) }, modifier = Modifier.weight(1f).padding(bottom = 12.dp).heightIn(min = 115.dp)) {
             Column(Modifier.fillMaxWidth().padding(18.dp), horizontalAlignment = androidx.compose.ui.Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 Icon(icon, null, tint = Mint, modifier = Modifier.size(32.dp)); Text(name, style = MaterialTheme.typography.titleMedium)
+                if (name == "Arbeitsprotokoll" || name == "Textvorlagen") Text(if (name == "Arbeitsprotokoll") "Störungen & Arbeiten" else "Texte wiederverwenden", style = MaterialTheme.typography.bodySmall, color = Muted)
             }
         } }
     } }
 }
 @Composable fun PasswordChangeDialog(busy: Boolean, close: () -> Unit, save: (CharArray, CharArray) -> Unit) {
-    var old by remember { mutableStateOf("") }; var next by remember { mutableStateOf("") }; var repeat by remember { mutableStateOf("") }
+    var old by rememberSaveable { mutableStateOf("") }; var next by rememberSaveable { mutableStateOf("") }; var repeat by rememberSaveable { mutableStateOf("") }
     Form("App-Passwort ändern", !busy && old.isNotEmpty() && next.length >= 10 && next == repeat && old != next, close, { save(old.toCharArray(), next.toCharArray()); old = ""; next = ""; repeat = "" }) {
         listOf(Triple("Aktuelles Passwort", old, { x: String -> old = x }), Triple("Neues Passwort (mind. 10 Zeichen)", next, { x: String -> next = x }), Triple("Wiederholen", repeat, { x: String -> repeat = x })).forEach { (label, value, change) ->
             OutlinedTextField(value, change, label = { Text(label) }, visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation(), singleLine = true, keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = androidx.compose.ui.text.input.KeyboardType.Password), modifier = Modifier.fillMaxWidth())

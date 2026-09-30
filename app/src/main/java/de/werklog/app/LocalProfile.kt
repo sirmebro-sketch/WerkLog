@@ -6,7 +6,7 @@ import java.util.Base64
 const val MAX_PROFILE_IMAGE_BYTES = 96 * 1024
 /** Private identity, encrypted with the vault. Never included in an asset share. */
 data class LocalProfile(val name: String = "", val role: String = "", val team: String = "",
-    val company: String = "", val phone: String = "", val email: String = "", val image: String = "")
+    val company: String = "", val phone: String = "", val email: String = "", val image: String = "") : java.io.Serializable
 fun profileJson(p: LocalProfile): JSONObject = JSONObject().put("name", p.name).put("role", p.role)
     .put("team", p.team).put("company", p.company).put("phone", p.phone).put("email", p.email).put("image", p.image)
 fun readProfile(j: JSONObject?): LocalProfile = if (j == null) LocalProfile() else LocalProfile(

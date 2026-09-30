@@ -8,9 +8,9 @@ import java.time.format.ResolverStyle
 /** These records never participate in mail or journal search. */
 data class Credential(val id: String = newId(), val assetId: String, val title: String,
     val username: String, val password: String, val address: String = "", val note: String = "",
-    val updated: Long = System.currentTimeMillis())
+    val updated: Long = System.currentTimeMillis()) : java.io.Serializable
 data class AssetInfo(val id: String = newId(), val assetId: String, val title: String, val body: String,
-    val updated: Long = System.currentTimeMillis())
+    val updated: Long = System.currentTimeMillis()) : java.io.Serializable
 
 private val dateFormat = DateTimeFormatter.ofPattern("dd.MM.uuuu").withResolverStyle(ResolverStyle.STRICT)
 fun parseServiceDate(text: String): LocalDate? = runCatching { LocalDate.parse(text.trim(), dateFormat) }.getOrNull()

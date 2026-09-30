@@ -19,6 +19,7 @@ import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.unit.dp
@@ -135,9 +136,9 @@ val LocalImageLoader = staticCompositionLocalOf<suspend (String) -> ByteArray> {
 }
 @Composable internal fun PhotoReview(file: File, target: PhotoTarget, data: Data, busy: Boolean, close: () -> Unit, openAsset: (String) -> Unit, save: (Data) -> Unit) {
     var result by remember { mutableStateOf<String?>(null) }; var error by remember { mutableStateOf<String?>(null) }
-    var value by remember { mutableStateOf("") }; var confirmed by remember { mutableStateOf(false) }
+    var value by rememberSaveable { mutableStateOf("") }; var confirmed by rememberSaveable { mutableStateOf(false) }
     val meters = data.work.meters
-    var meterId by remember { mutableStateOf(target.id) }
+    var meterId by rememberSaveable { mutableStateOf(target.id) }
     val meter = meters.find { it.id == meterId }
     LaunchedEffect(file.path) {
         try { result = when (target.kind) { "meter" -> recognizeMeter(file); "asset" -> readAssetCode(file); "profile" -> compactPhoto(file, 384, MAX_PROFILE_IMAGE_BYTES); else -> compactPhoto(file) } }
