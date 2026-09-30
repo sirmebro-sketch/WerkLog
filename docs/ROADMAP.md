@@ -1,4 +1,11 @@
-# Stand 0.4.1 — Umsetzung und Grenzen
+# Stand 0.4.2 — Umsetzung und Grenzen
+
+## Ergänzungen 0.4.2
+
+- Kamera-Zwischenstand/Zielzuordnung bleiben bei Activity-Neuerstellung erhalten; Konfigurationswechsel sperren die laufende Sitzung nicht. Echter Prozessneustart benötigt weiterhin Entsperren.
+- Große Bildansicht mit Zoom/Verschieben, Zurücksetzen und geschütztem Vollbildfenster.
+- Anleitungs-Einstellungen unter den Schritten; „+ Nächster Schritt“ bleibt oben sichtbar.
+- 44 JVM-Tests und erweiterter Emulatorablauf mit simulierter Kamera-Rückgabe erfolgreich. Physische Kamera und Zoom-Gesten auf S24 noch prüfen; siehe DEVICE-TEST.md.
 
 ## Ergänzungen 0.4.1
 

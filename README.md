@@ -2,7 +2,11 @@
 
 Lokaler Android-Companion für Servicetechniker, in **Kotlin und Jetpack Compose**. Kein Konto, keine Internetberechtigung, keine Java-Quelldateien. Öffentlich ist der Quellcode; Arbeitsdaten liegen ausschließlich im verschlüsselten Gerätespeicher.
 
-## 0.4.1 — Testversion
+## 0.4.2 — Testversion
+
+Neu: Kamera-Ziel und temporäres Foto überleben die Android-Neuerstellung. Normale Bildschirmdrehung sperrt den Tresor nicht; Bildschirm aus und regulärer App-Wechsel bleiben geschützt. Nach einem Prozessneustart ist weiterhin das Passwort nötig, eine wiederhergestellte ausstehende Aufnahme kann danach bestätigt werden (temporäre Wiederaufnahme maximal 15 Minuten). Fotos öffnen auf Wunsch bildschirmfüllend mit Zwei-Finger-Zoom bis 6×. In Anleitungen bleibt „+ Nächster Schritt“ oben erreichbar; Anleitungseinstellungen stehen unter den Schritten.
+
+### Ergänzungen aus 0.4.1
 
 Neu: kompakte App-Führung ohne Abdunklung, automatisches freiwilliges Fingerabdruck-Angebot nach dem Anlegen des Passworts, lokales Profil unter Einstellung (Name, Foto, Funktion, Bereich und dienstliche Kontakte) sowie ein Kraftwerk-Symbol für Betrieb. Profilinformationen liegen im verschlüsselten Tresor, sind in Vollsicherungen enthalten und werden nicht automatisch per Mail oder Anlagenfreigabe weitergegeben. Profilfoto bis 384 Pixel/96 KiB. Neue Sicherungen/Freigaben benötigen 0.4.1; ältere Dateien bleiben lesbar.
 
@@ -33,7 +37,7 @@ Anlage oder Wissenseintrag verschlüsselt mit separatem Zufallscode teilen; Pass
 
 ## Qualität und verbleibende Arbeit
 
-Am 29.09.2026 für 0.4.1 erfolgreich: [Android-Build mit 44 JVM-Tests, Lint und APK-Netzwerkprüfung](https://github.com/sirmebro-sketch/WerkLog/actions/runs/36622947048) und [Bedienablauf im Android-15-Emulator samt Führung-/Layoutaufnahme](https://github.com/sirmebro-sketch/WerkLog/actions/runs/36622947260). Der unveränderte [Swift-Codec-Test](https://github.com/sirmebro-sketch/WerkLog/actions/runs/36618330660) wurde zuvor erfolgreich geprüft. Kamera, reale Zählererkennung, Biometrie und Mail-App müssen auf dem S24 Ultra erprobt werden. Keine produktive Gerätefreigabe behauptet.
+Am 30.09.2026 für 0.4.2 erfolgreich: [Android-Build mit 44 JVM-Tests, Lint und APK-Netzwerkprüfung](https://github.com/sirmebro-sketch/WerkLog/actions/runs/36665143563) und [erweiterter Bedienablauf im Android-15-Emulator](https://github.com/sirmebro-sketch/WerkLog/actions/runs/36665143503). Der Ablauf prüft auch eine simulierte Kamera-Rückgabe nach Hintergrundwechsel und Activity-Neuerstellung, korrekte Bildzuordnung zum zweiten Anleitungsschritt, Öffnen der Vollbildansicht und den festen Schritt-Knopf. Der unveränderte Swift-Kern wurde zuvor geprüft. Kamera, reale Zählererkennung, Biometrie und Mail-App müssen auf dem S24 Ultra erprobt werden. Keine produktive Gerätefreigabe behauptet.
 
 - [Umsetzung und offene Punkte](docs/ROADMAP.md)
 - [Geräteabnahme](docs/DEVICE-TEST.md)

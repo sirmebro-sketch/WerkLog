@@ -43,3 +43,8 @@ Außerhalb des Tresors liegen nur geplante Auslösezeitpunkte; Benachrichtigunge
 ## Vor produktiver Nutzung
 
 Dauerhafte Release-Signatur (RELEASE-SIGNING.md), erfolgreiche aktuelle CI und S24-Geräteprüfung. Kamera-/OCR-Qualität, Biometrie, Mail-App und Energiesparverhalten brauchen reale Abnahme. Keine echten Betriebsdaten im öffentlichen Repository. Interne Freigaben und offizielle Melde-/Prüfwege bleiben maßgeblich; die App dokumentiert, steuert keine Anlagen und setzt keine betrieblichen Grenzwerte voraus.
+
+
+### Kamera und Bildansicht ab 0.4.2
+
+Ein Android-Konfigurationswechsel (z. B. Drehung) erhält die laufende Tresorsitzung. Ein echter Prozessneustart stellt keinen Schlüssel wieder her. Ausstehendes Bildziel und temporärer Dateiname werden in Androids Instanzzustand gesichert, ohne Passwort/Schlüssel. Kamera-Rohbilder liegen bis zur Bestätigung/Abbruch vorübergehend im privaten Cache; bei Wiederaufnahme nach Neuerstellung werden nur Dateien unter 15 Minuten akzeptiert, andere bei Appstart bereinigt. Bei Abschluss/Abbruch/Beenden werden sie entfernt. Meterfotos bleiben kein dauerhaftes Archiv. Die Vollbildansicht erzwingt ebenfalls FLAG_SECURE. Bildschirm aus/manuelles Sperren bleiben sofort wirksam; die bestehende Zwei-Minuten-Frist bei bewusster externer Übergabe bleibt bestehen.

@@ -116,3 +116,24 @@ Noch auf dem realen Gerät prüfen:
 - [ ] Profilfoto aus Kamera/Galerie, Ausrichtung, Bildaustausch und Entfernen prüfen.
 - [ ] Profil nach Sperren/Entsperren, Neustart, Passwortwechsel und Vollsicherungs-Wiederherstellung vorhanden.
 - [ ] Anlagenfreigabe und Mail-Vorschau enthalten keine ungefragt übernommenen Profildaten.
+
+
+## Abnahme 0.4.2
+
+Automatisiert erfolgreich am 30.09.2026:
+
+- [x] [Android-CI](https://github.com/sirmebro-sketch/WerkLog/actions/runs/36665143563): 44 JVM-Tests, Lint, APK und Netzwerkberechtigungsprüfung.
+- [x] [Android-15-Emulator](https://github.com/sirmebro-sketch/WerkLog/actions/runs/36665143503): kompletter bisheriger Einrichtungs-/Profil-/Passwortablauf plus Anleitung mit zwei Schritten; feststehender Schritt-Knopf beim Scrollen zu den Einstellungen.
+- [x] Synthetische Aufnahme samt Ziel hinterlegt, App-Hintergrund und Activity-Neuerstellung durchlaufen, ungesperrte Sitzung und erhaltene Datei geprüft, Kamera-Erfolg simuliert, Vollbild geöffnet/geschlossen und gespeichert. Nur der zweite Anleitungsschritt erhält das verschlüsselte Bild; Rohdatei danach gelöscht.
+
+Dies simuliert die Android-Rückgabe, nicht die reale Samsung-Kamera. Echtes Prozessende, Finger-Gesten und gerätespezifische Kamera bleiben Gerätechecks.
+
+APK `WerkLog-0.4.2-Test.apk`, SHA-256 `faa198f813930df7147d07351c447cd4d7430fac713c08779aaa30fb64db2a94`.
+
+- [ ] S24-Kamera: Anleitungsschritt und Bestellposition fotografieren, zurückkehren und speichern; Zuordnung bleibt richtig.
+- [ ] Kamera im Querformat verwenden und zur App im Hochformat zurückkehren.
+- [ ] Während Kamera Bildschirm sperren: nach Entsperren Foto prüfen, keine offene Tresorsitzung ohne Authentifizierung.
+- [ ] Kamera länger als zwei Minuten offen: App verlangt Passwort, ausstehendes Foto anschließend bestätigen.
+- [ ] Prozessneustart während externer Kamera (Android stellt Instanzzustand wieder her): Passwort erforderlich, Aufnahme innerhalb 15 Minuten wieder aufnehmbar.
+- [ ] Foto in Vollbild öffnen, mit zwei Fingern vergrößern/verschieben, Zurücksetzen, Schließen; Screenshot-Schutz.
+- [ ] Lange Anleitung: Schritt-Knopf bleibt oben erreichbar, Anleitungseinstellungen stehen unter den Schritten.
