@@ -59,7 +59,7 @@ object Exchange {
 fun assetPackage(data: Data, id: String, credentials: Boolean, history: Boolean, infoId: String? = null): Data {
     val asset = data.assets.single { it.id == id }
     return Data(assets = listOf(if (infoId == null) asset.copy(parentId = "", favorite = false, lastOpened = 0) else Asset(id = asset.id, name = asset.name, trade = asset.trade, location = "", note = "")),
-        entries = if (history && infoId == null) data.entries.filter { it.assetId == id } else emptyList(),
+        entries = if (history && infoId == null) data.entries.filter { it.assetId == id }.map { e -> e.copy(guideIds = e.guideIds.filter { g -> data.work.guides.any { it.id == g && it.assetId == id } }) } else emptyList(),
         readings = if (history && infoId == null) data.readings.filter { it.assetId == id } else emptyList(),
         credentials = if (credentials && infoId == null) data.credentials.filter { it.assetId == id } else emptyList(),
         infos = data.infos.filter { it.assetId == id && (infoId == null || it.id == infoId) },

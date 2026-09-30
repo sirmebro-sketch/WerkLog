@@ -26,6 +26,18 @@ class RelationsTest {
         assertEquals(removed, decode(encode(removed)))
         assertTrue(removeEntry(data, entry.id).contacts.single().entryIds.isEmpty())
     }
+    @Test fun shareKeepsGuideLinksButDoesNotExportAddressBook() {
+        val guide = Guide(title = "Prüfschritte", assetId = asset.id)
+        val e = entry.copy(guideIds = listOf(guide.id))
+        val contact = Contact(name = "Privater Testkontakt", assetIds = listOf(asset.id), entryIds = listOf(e.id))
+        val data = Data(assets = listOf(asset), entries = listOf(e), contacts = listOf(contact), work = WorkData(guides = listOf(guide)))
+        val outgoing = assetPackage(data, asset.id, false, true)
+        assertTrue(outgoing.contacts.isEmpty())
+        val incoming = importPackage(Data(), outgoing)
+        assertEquals(incoming.work.guides.single().id, incoming.entries.single().guideIds.single())
+        assertEquals(incoming.assets.single().id, incoming.work.guides.single().assetId)
+        assertEquals(incoming, decode(encode(incoming)))
+    }
     @Test fun assetImagesParticipateInEncryptedImageMappingAndLimit() {
         val image = java.util.Base64.getEncoder().encodeToString(byteArrayOf(0xff.toByte(), 0xd8.toByte(), 0, 0))
         val data = attachImage(Data(assets = listOf(asset)), PhotoTarget("cover", asset.id), image)

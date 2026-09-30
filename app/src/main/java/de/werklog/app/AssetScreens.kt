@@ -46,6 +46,8 @@ import kotlinx.coroutines.delay
             StoredPhoto(asset.coverImage, true)
             TextButton(onClick = { photo(PhotoTarget("cover", asset.id)) }, enabled = !busy && (asset.coverImage.isNotBlank() || imageValues(data).count { it.isNotEmpty() } < MAX_IMAGES)) { Text(if (asset.coverImage.isBlank()) "+ Anlagenbild" else "Anlagenbild ersetzen") }
             if (asset.coverImage.isNotBlank()) TextButton(onClick = { save(data.copy(assets = data.assets.map { if (it.id == asset.id) it.copy(coverImage = "") else it })) }, enabled = !busy) { Text("Anlagenbild entfernen") }
+            val openRecord = LocalRecordLink.current
+            TextButton(onClick = { openRecord("Neue Bestellung", asset.id) }, enabled = !busy) { Text("+ Bestellung für diese Anlage") }
             ContactLinks(data, "Anlagen", asset.id, busy, save)
             data.work.guides.filter { it.assetId == asset.id }.forEach { RecordLink("Anleitungen", it.id, "Anleitung: ${it.title}") }
             data.work.orders.filter { it.assetId == asset.id || it.items.any { x -> x.assetId == asset.id } }.forEach { RecordLink("Bestellungen", it.id, "Bestellung: ${it.title} · ${it.status}") }

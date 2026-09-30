@@ -26,6 +26,18 @@ class RepositoryTest {
             imageValues(restored.third).forEach { assertArrayEquals(jpeg, restoredRepo.image(it, restored.second)) }
         } finally { root.deleteRecursively(); other.deleteRecursively() }
     }
+    @Test fun assetCoverPhotoIsEncryptedAndIncludedInBackup() {
+        val root = Files.createTempDirectory("cover").toFile(); val other = Files.createTempDirectory("cover-restore").toFile()
+        try {
+            val repo = LocalRepository(root); val salt = Vault.salt(); val key = Vault.key(password, salt)
+            val asset = Asset(name = "Testanlage", trade = "Wasser", location = "", note = "", coverImage = Base64.getEncoder().encodeToString(jpeg))
+            val stored = repo.save(Data(assets = listOf(asset)), key, salt)
+            assertTrue(isImageRef(stored.assets.single().coverImage))
+            val archive = File(root, "backup"); archive.outputStream().use(repo::export)
+            val restoredRepo = LocalRepository(other); val restored = restoredRepo.restore(archive, password)
+            assertArrayEquals(jpeg, restoredRepo.image(restored.third.assets.single().coverImage, restored.second))
+        } finally { root.deleteRecursively(); other.deleteRecursively() }
+    }
     @Test fun wrongPasswordOrMissingImageCannotReplaceExistingData() {
         val root = Files.createTempDirectory("werklog").toFile()
         try {

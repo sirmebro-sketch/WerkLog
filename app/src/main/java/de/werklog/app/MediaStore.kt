@@ -14,7 +14,7 @@ import javax.crypto.spec.SecretKeySpec
 
 const val MAX_ARCHIVE_BYTES = 384L * 1024 * 1024
 fun isImageRef(s: String) = Regex("img:[a-f0-9-]{36}").matches(s)
-fun imageValues(d: Data) = d.assets.map { it.coverImage } + d.work.guides.flatMap { it.steps.map { s -> s.image } } + d.work.orders.flatMap { it.items.map { x -> x.image } }
+fun imageValues(d: Data) = (d.assets.map { it.coverImage } + d.work.guides.flatMap { it.steps.map { s -> s.image } } + d.work.orders.flatMap { it.items.map { x -> x.image } }).filter { it.isNotEmpty() }
 fun mapImages(d: Data, transform: (String) -> String): Data = d.copy(assets = d.assets.map { it.copy(coverImage = transform(it.coverImage)) }, work = d.work.copy(
     guides = d.work.guides.map { g -> g.copy(steps = g.steps.map { it.copy(image = transform(it.image)) }) },
     orders = d.work.orders.map { o -> o.copy(items = o.items.map { it.copy(image = transform(it.image)) }) }))

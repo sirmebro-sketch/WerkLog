@@ -346,6 +346,11 @@ private fun java.io.InputStream.readBytesLimited(): ByteArray {
         dialog = null
         when (kind) {
             "Anlagen" -> { selectedAssetId = id; page = 1; tool = null }
+            "Neue Bestellung" -> {
+                val order = PartsOrder(title = "Materialbedarf · ${assetName(d, id)}", assetId = id)
+                model.update(d.copy(work = d.work.copy(orders = d.work.orders + order)))
+                linkedRecord = order.id; tool = "Bestellungen"; page = 4
+            }
             "Vorgang" -> { editEntry = d.entries.find { it.id == id }; dialog = "entry" }
             else -> { linkedRecord = id; tool = kind; page = 4 }
         }
@@ -544,7 +549,7 @@ private fun java.io.InputStream.readBytesLimited(): ByteArray {
         dismissButton = { TextButton(onClick = model::dismissBiometricOffer) { Text("Später") } })
     if (dialog == "password") PasswordChangeDialog(model.busy, { dialog = null }) { old, next -> model.changePassword(old, next); dialog = null }
     if (dialog == "asset") AssetEditor(editAsset, d.assets, availableTrades(d), { dialog = null }) { a -> model.update(d.copy(assets = d.assets.filterNot { it.id == a.id } + a)); dialog = null }
-    if (dialog == "entry") EntryEditor(editEntry, d, { model.update(it) }, d.assets, d.work.templates, preselectedAssetId, { dialog = null }, { editEntry?.let { removal = "entry" to it.id }; dialog = null }, { e ->
+    if (dialog == "entry") EntryEditor(editEntry, d, model.busy, { model.update(it) }, d.assets, d.work.templates, preselectedAssetId, { dialog = null }, { editEntry?.let { removal = "entry" to it.id }; dialog = null }, { e ->
         val order = orderFromEntry(e)
         model.update(d.copy(entries = d.entries.filterNot { it.id == e.id } + e, work = d.work.copy(orders = d.work.orders + order))); linkedRecord = order.id; dialog = null; page = 4; tool = "Bestellungen"
     }, { e ->
@@ -599,14 +604,18 @@ private fun java.io.InputStream.readBytesLimited(): ByteArray {
     AlertDialog(onDismissRequest = close, title = { Text(title) }, text = { Column(Modifier.heightIn(max = 520.dp).verticalScroll(rememberScrollState()), content = content) },
         confirmButton = { TextButton(onClick = save, enabled = valid) { Text(confirmLabel) } }, dismissButton = { TextButton(onClick = close) { Text("Abbrechen") } })
 }
-@Composable private fun EntryEditor(existing: Entry?, data: Data, saveData: (Data) -> Unit, assets: List<Asset>, templates: List<EntryTemplate>, initialAssetId: String?, close: () -> Unit, delete: () -> Unit, order: (Entry) -> Unit, appointment: (Entry) -> Unit, save: (Entry) -> Unit) {
+@Composable private fun EntryEditor(existing: Entry?, data: Data, busy: Boolean, saveData: (Data) -> Unit, assets: List<Asset>, templates: List<EntryTemplate>, initialAssetId: String?, close: () -> Unit, delete: () -> Unit, order: (Entry) -> Unit, appointment: (Entry) -> Unit, save: (Entry) -> Unit) {
     var asset by rememberSaveable { mutableStateOf(existing?.assetId ?: initialAssetId ?: assets.firstOrNull()?.id.orEmpty()) }
     var title by rememberSaveable { mutableStateOf(existing?.title ?: "") }; var note by rememberSaveable { mutableStateOf(existing?.note ?: "") }
     var priority by rememberSaveable { mutableStateOf(existing?.priority ?: "Normal") }; var status by rememberSaveable { mutableStateOf(existing?.status ?: "Offen") }
     var minutes by rememberSaveable { mutableStateOf((existing?.minutes ?: 0).toString()) }
     var guideIds by rememberSaveable { mutableStateOf(existing?.guideIds ?: emptyList<String>()) }
     fun current() = Entry(existing?.id ?: newId(), asset, title.trim(), note.trim(), priority, status, existing?.created ?: System.currentTimeMillis(), System.currentTimeMillis(), minutes.toIntOrNull() ?: 0, guideIds)
-    Form("Störung / Tätigkeit", title.isNotBlank() && asset.isNotEmpty() && (minutes.toIntOrNull()?.let { it >= 0 } == true), close, {
+    val navigate = LocalRecordLink.current
+    CompositionLocalProvider(LocalRecordLink provides { kind, id ->
+        if (!busy && title.isNotBlank() && asset.isNotEmpty() && minutes.toIntOrNull()?.let { it >= 0 } == true) { save(current()); navigate(kind, id) }
+    }) {
+    Form("Störung / Tätigkeit", !busy && title.isNotBlank() && asset.isNotEmpty() && (minutes.toIntOrNull()?.let { it >= 0 } == true), close, {
         save(current())
     }) {
         if (existing == null) Picker("Vorlage", (starterTemplates + templates).map { it.id to it.name }, "") { id -> (starterTemplates + templates).find { it.id == id }?.let { title = it.title; note = it.body } }
@@ -616,16 +625,17 @@ private fun java.io.InputStream.readBytesLimited(): ByteArray {
         LinkChoices("Passende Anleitungen", data.work.guides.map { it.id to it.title }, guideIds) { guideIds = it }
         data.work.guides.filter { it.id in guideIds || (it.assetId == asset && asset.isNotBlank()) }.forEach { g ->
             val open = LocalRecordLink.current
-            TextButton(onClick = { save(current()); open("Anleitungen", g.id) }) { Text("Anleitung: ${g.title}") }
+            TextButton(onClick = { open("Anleitungen", g.id) }) { Text("Anleitung: ${g.title}") }
         }
         if (existing != null) {
-            ContactLinks(data, "Vorgang", existing.id, false, saveData)
+            ContactLinks(data, "Vorgang", existing.id, busy, saveData)
             data.work.orders.filter { it.entryId == existing.id }.forEach { o -> RecordLink("Bestellungen", o.id, "Bestellung: ${o.title}") }
-            TextButton(onClick = { order(current()) }) { Text("Teileanforderung aus diesem Vorgang") }
+            TextButton(onClick = { order(current()) }, enabled = !busy && title.isNotBlank() && minutes.toIntOrNull()?.let { it >= 0 } == true) { Text("Teileanforderung aus diesem Vorgang") }
             TextButton(onClick = { appointment(current()) }) { Text("Folgetermin anlegen (morgen 08:00, danach bearbeiten)") }
             TextButton(onClick = delete) { Text("Vorgang löschen", color = MaterialTheme.colorScheme.error) }
         }
         if (existing != null) TextButton(onClick = { save(existing.copy(id = newId(), title = "$title (Kopie)", note = note, status = "Offen", created = System.currentTimeMillis(), updated = System.currentTimeMillis(), minutes = 0)) }) { Text("Als neue Tätigkeit duplizieren") }
+    }
     }
 }
 @Composable private fun ReadingEditor(existing: Reading?, assets: List<Asset>, initialAssetId: String?, close: () -> Unit, save: (Reading) -> Unit) {

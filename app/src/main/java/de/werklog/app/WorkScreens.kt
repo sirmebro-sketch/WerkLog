@@ -182,7 +182,7 @@ val LocalGuideStepAction = staticCompositionLocalOf<((() -> Unit)?) -> Unit> { {
         TextButton(onClick = { update(guide.copy(checked = LocalDate.now().format(DateTimeFormatter.ofPattern("dd.MM.uuuu")))) }, enabled = !busy) { Text("Heute inhaltlich geprüft") }
         TextButton(onClick = { editor = true }, enabled = !busy) { Text("Titel / Anlage bearbeiten") }; TextButton(onClick = { deleteGuide = true }, enabled = !busy) { Text("Anleitung löschen") }
         if (guide.steps.isEmpty()) Hint("Füge oben den ersten Arbeitsschritt hinzu.")
-        Hint("Bilder: max. 512 KiB pro Bild, insgesamt höchstens 500 Bilder für Anleitungen und Bestelllisten. Fotos erst nach dem Speichern des Schritts hinzufügen.")
+        Hint("Bilder: max. 512 KiB pro Bild, insgesamt höchstens 500 Bilder für Anlagen, Anleitungen und Bestelllisten. Fotos erst nach dem Speichern des Schritts hinzufügen.")
     }
     if (deleteGuide && guide != null) ConfirmRemoval("Anleitung löschen?", "Alle Schritte und Bilder dieser Anleitung werden entfernt.", busy, { deleteGuide = false }) { save(d.copy(entries = d.entries.map { it.copy(guideIds = it.guideIds - guide.id) }, work = d.work.copy(guides = d.work.guides.filterNot { it.id == guide.id }))); selected = null }
     if (editor) {
@@ -238,7 +238,6 @@ val LocalGuideStepAction = staticCompositionLocalOf<((() -> Unit)?) -> Unit> { {
         OutlinedButton(onClick = { preview = true }, enabled = order.items.isNotEmpty() && !busy) { Text("Bestellung als E-Mail vorbereiten") }
         Picker("Bestellstatus", orderStatuses.map { it to it }, order.status) { if (!busy) update(order.copy(status = it, completed = it == "Geliefert" || it == "Abgesagt")) }
         if (order.delivery.isNotBlank()) Text("Lieferdatum: ${order.delivery}")
-        if (order.entryId.isNotBlank()) Text("Vorgang: ${d.entries.find { it.id == order.entryId }?.title ?: "Archiviert"}")
         Hint("Die Anlagenzuordnung bleibt lokal. Nur Bezeichnung, Menge, Zweck und hinzugefügte Bilder werden übergeben. Versand erfolgt ausschließlich durch dich in der Mail-App.")
     }
     if (deleteOrder && order != null) ConfirmRemoval("Bestellliste löschen?", "Alle Positionen und Bilder dieser lokalen Liste werden entfernt. Bereits versandte E-Mails bleiben unverändert.", busy, { deleteOrder = false }) { save(d.copy(work = d.work.copy(orders = d.work.orders.filterNot { it.id == order.id }))); selected = null }

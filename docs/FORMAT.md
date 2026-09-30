@@ -1,6 +1,6 @@
 # Offline-Formate, Version 0.4
 
-Alle Integer-Felder im JSON; Text UTF-8. Datenschema 5. Decoder akzeptiert Schema 1–5. Schema 5 ergänzt das optionale lokale Profil (Name, Funktion, Team, Betrieb, Diensttelefon, E-Mail, JPEG-Profilfoto als Base64 bis 96 KiB). Das Profilfoto bleibt innerhalb der verschlüsselten Metadaten und belegt keinen der 500 Plätze für Arbeitsbilder. Ältere Dateien erhalten ein leeres Profil. Anlagenpakete enthalten stets ein leeres Profil; Importe bewahren das Profil des Empfängers. Die kryptografischen Testvektoren unter app/src/test/resources/interop.json und apple/WerkLogCore/Tests sind synthetisch und identisch.
+Alle Integer-Felder im JSON; Text UTF-8. Datenschema 6. Decoder akzeptiert Schema 1–6. Schema 5 ergänzt das optionale lokale Profil (Name, Funktion, Team, Betrieb, Diensttelefon, E-Mail, JPEG-Profilfoto als Base64 bis 96 KiB). Das Profilfoto bleibt innerhalb der verschlüsselten Metadaten und belegt keinen der 500 Plätze für Arbeitsbilder. Ältere Dateien erhalten ein leeres Profil. Anlagenpakete enthalten stets ein leeres Profil; Importe bewahren das Profil des Empfängers. Die kryptografischen Testvektoren unter app/src/test/resources/interop.json und apple/WerkLogCore/Tests sind synthetisch und identisch.
 
 ## Metadaten (`data.vault`)
 
@@ -21,3 +21,11 @@ Neue Datei: 8 ASCII-Bytes `WRKSHR02`, danach ZIP wie oben, mit einem eigens abge
 ## Atomare Speicherung
 
 Unveränderliche verschlüsselte Bilder zuerst schreiben, Metadaten zuletzt atomar ersetzen. Verwaiste Bilder nach erfolgreichem Commit entfernen. Restore/Passwortwechsel in separatem `store-<UUID>` aufbauen, sämtliche Inhalte prüfen und erst danach den `active`-Zeiger atomar ersetzen. Fehler vor diesem Punkt verändern den aktiven Tresor nicht. Für einen vollen Wechsel/Export genügend freien Gerätespeicher für eine weitere Kopie vorhalten.
+
+## Schema 6 (0.5.0)
+
+Der Decoder akzeptiert Schema 1–6. Optionale Ergänzungen: `Asset.coverImage` (derselbe verschlüsselte Bildspeicher wie Arbeitsschritte), `Entry.guideIds`, `PartsOrder.assetId` und `context`, `Data.contacts` sowie `tradeNames`. Kontakte speichern ihre Anlagen- und Vorgangs-IDs einmalig; Gegenrichtungen werden daraus abgeleitet. Löschoperationen entfernen betroffene Kontaktbezüge. Bestellgrundinformationen bleiben beim Löschen des Ausgangsvorgangs als Text erhalten, die Verknüpfung entfällt. Bestehende Bestellpositionen werden bei der Migration nicht gelöscht.
+
+Kontakte gehören zur vollständigen Sicherung, nicht zur Anlagenfreigabe. Der Bilddeckel von 500 umfasst jetzt auch Anlagenbilder. Pro Bild weiterhin 512 KiB, Metadaten 32 MiB, Archiv 384 MiB. Empfänger von Schema-6-Freigaben benötigen WerkLog 0.5.0 oder neuer.
+
+Formularentwürfe liegen separat in `ui-draft.vault`, mit demselben Tresorschlüssel verschlüsselt. Sie enthalten Seite, Auswahl, Scrollpositionen und registrierte Formulardaten. Sie werden beim Sperren/Verlassen und während der Eingabe gesichert. Sie werden nicht in die vollständige Sicherung aufgenommen: vor Gerätewechsel offene Formulare speichern. Androids System-Saved-State enthält diese Formulardaten nicht. Unlesbare Entwürfe werden verschlüsselt als Wiederherstellungsdatei erhalten; Speicherfehler werden angezeigt.

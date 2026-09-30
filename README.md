@@ -2,15 +2,21 @@
 
 Lokaler Android-Companion für Servicetechniker, in **Kotlin und Jetpack Compose**. Kein Konto, keine Internetberechtigung, keine Java-Quelldateien. Öffentlich ist der Quellcode; Arbeitsdaten liegen ausschließlich im verschlüsselten Gerätespeicher.
 
-## 0.4.2 — Testversion
+## 0.5.0 — Testversion
 
-Neu: Kamera-Ziel und temporäres Foto überleben die Android-Neuerstellung. Normale Bildschirmdrehung sperrt den Tresor nicht; Bildschirm aus und regulärer App-Wechsel bleiben geschützt. Nach einem Prozessneustart ist weiterhin das Passwort nötig, eine wiederhergestellte ausstehende Aufnahme kann danach bestätigt werden (temporäre Wiederaufnahme maximal 15 Minuten). Fotos öffnen auf Wunsch bildschirmfüllend mit Zwei-Finger-Zoom bis 6×. In Anleitungen bleibt „+ Nächster Schritt“ oben erreichbar; Anleitungseinstellungen stehen unter den Schritten.
+Neu: lokale Kontakte mit beidseitigen Anlagen-/Vorgangsbezügen, Anlagenbilder, kompakte gefilterte Anlagenliste und eigene Gewerke. Bestellungen aus Störungen starten mit leerer Teileliste und separaten editierbaren Grundinformationen. Anleitungen sind aus Anlage und Vorgang erreichbar. Entsperren stellt offene Formulare einschließlich Eingaben wieder her; eingerichtete Biometrie wird automatisch angeboten. Arbeitsprotokoll = Störungen und Arbeiten; Textvorlagen = wiederverwendbare Texte. Sicherungen liegen nur in Einstellungen.
+
+Entwürfe vor Gerätewechsel speichern; sie sind lokal verschlüsselt, aber nicht Teil des Sicherungsexports. Neue Anlagenfreigaben benötigen auf beiden Geräten mindestens 0.5.0.
+
+### Ergänzungen aus 0.4.2
+
+Kamera-Ziel und temporäres Foto überleben die Android-Neuerstellung. Normale Bildschirmdrehung sperrt den Tresor nicht; Bildschirm aus und regulärer App-Wechsel bleiben geschützt. Nach einem Prozessneustart ist weiterhin das Passwort nötig, eine wiederhergestellte ausstehende Aufnahme kann danach bestätigt werden (temporäre Wiederaufnahme maximal 15 Minuten). Fotos öffnen auf Wunsch bildschirmfüllend mit Zwei-Finger-Zoom bis 6×. In Anleitungen bleibt „+ Nächster Schritt“ oben erreichbar; Anleitungseinstellungen stehen unter den Schritten.
 
 ### Ergänzungen aus 0.4.1
 
-Neu: kompakte App-Führung ohne Abdunklung, automatisches freiwilliges Fingerabdruck-Angebot nach dem Anlegen des Passworts, lokales Profil unter Einstellung (Name, Foto, Funktion, Bereich und dienstliche Kontakte) sowie ein Kraftwerk-Symbol für Betrieb. Profilinformationen liegen im verschlüsselten Tresor, sind in Vollsicherungen enthalten und werden nicht automatisch per Mail oder Anlagenfreigabe weitergegeben. Profilfoto bis 384 Pixel/96 KiB. Neue Sicherungen/Freigaben benötigen 0.4.1; ältere Dateien bleiben lesbar.
+Neu: kompakte App-Führung ohne Abdunklung, automatisches freiwilliges Fingerabdruck-Angebot nach dem Anlegen des Passworts, lokales Profil unter Einstellung (Name, Foto, Funktion, Bereich und dienstliche Kontakte) sowie ein Kraftwerk-Symbol für Betrieb. Profilinformationen liegen im verschlüsselten Tresor, sind in Vollsicherungen enthalten und werden nicht automatisch per Mail oder Anlagenfreigabe weitergegeben. Profilfoto bis 384 Pixel/96 KiB. Ältere Dateien bleiben lesbar.
 
-Drei Hauptpunkte: **Heute · Betrieb · Einstellung**. Betrieb ist der hervorgehobene mittlere Knopf mit einer zweispaltigen Kachelübersicht. Die kurze Einführung erklärt die wichtigsten Bereiche und ist in Einstellung erneut verfügbar. Start ist immer Heute.
+Drei Hauptpunkte: **Heute · Betrieb · Einstellung**. Betrieb ist der hervorgehobene mittlere Knopf mit einer zweispaltigen Kachelübersicht. Die kurze Einführung erklärt die wichtigsten Bereiche und ist in Einstellung erneut verfügbar. Beim ersten Start erscheint Heute; nach einer Sperre wird der letzte Arbeitsstand wieder aufgenommen.
 
 ### Alltag
 
@@ -27,7 +33,7 @@ Drei Hauptpunkte: **Heute · Betrieb · Einstellung**. Betrieb ist der hervorgeh
 
 **32 MiB Metadaten plus bis zu 500 Bilder à 512 KiB** (etwa 250 MiB Bilder, abhängig von Kompression weniger). Bilder liegen einzeln AES-GCM-verschlüsselt; Textänderungen schreiben sie nicht erneut. Kamera-/Galeriebilder werden verkleinert, Metadaten entfernt. Ein ausgewähltes Galerie-Original bleibt außerhalb der App unverändert.
 
-Vollsicherungen und Kollegenaustausch werden bildweise verarbeitet (Container höchstens 384 MiB), sodass nicht alle Bilddaten zugleich im Speicher liegen. Alte Sicherungen lesbar; neue Archive benötigen 0.4+. Speicherübersicht unter Einstellung, Erinnerung an fehlende Sicherung nach sieben Tagen.
+Vollsicherungen und Kollegenaustausch werden bildweise verarbeitet (Container höchstens 384 MiB), sodass nicht alle Bilddaten zugleich im Speicher liegen. Alte Sicherungen lesbar; neue Archive benötigen 0.5.0. Speicherübersicht unter Einstellung, Erinnerung an fehlende Sicherung nach sieben Tagen.
 
 Lokales Passwort ändern verschlüsselt den gesamten Tresor neu. **Alte Sicherungen behalten ihr altes Passwort.** Starke Biometrie optional über Android Keystore. Beim gewöhnlichen Verlassen Sperre; Dateiauswahl/Kollegenaustausch erlauben Wechsel von maximal zwei Minuten. Bildschirm aus oder manuelle Sperre sperrt sofort. Kein Wiederherstellen eines vergessenen Passworts.
 

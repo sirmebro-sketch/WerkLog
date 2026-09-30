@@ -1,4 +1,4 @@
-# Stand 0.4.2 — Umsetzung und Grenzen
+# Stand 0.5.0 — Umsetzung und Grenzen
 
 ## Ergänzungen 0.4.2
 
@@ -49,3 +49,11 @@ Android-Build (40 JVM-Tests, Lint, APK-Netzwerkprüfung) und Android-15-Bedienab
 7. **Bildbedarf oberhalb 500:** Architektur speichert bereits getrennt. Grenzwerte erst nach Ressourcen-/Backup-Prüfung erhöhen; nicht unkontrolliert ausweiten.
 
 Die offenen Funktionen sind kein Nachweis einer Gerätefreigabe. Keine echten Betriebsdaten im öffentlichen Repository. Alle Testdaten synthetisch.
+
+## Ergänzungen 0.5.0
+
+Umgesetzt: verschlüsselte Wiederaufnahme offener Formulare nach Sperren; automatische Biometrie-Anforderung; Sicherung nur unter Einstellungen; verständlichere Bezeichnungen Arbeitsprotokoll und Textvorlagen. Bestellungen aus Vorgängen enthalten separate editierbare Grundinformationen und beginnen ohne künstliche Teileposition. Anlagenbilder, kompakte Anlagenzeilen mit Gewerke-/Favoritenfilter, Gewerkeverwaltung und lokales Adressbuch. Kontakte sind mit Anlagen und Vorgängen in beide Richtungen verknüpft. Anlagen zeigen Anleitungen/Bestellungen, Vorgänge zeigen explizit zugeordnete und anlagenbezogene Anleitungen sowie Bestellungen.
+
+Bewusste Grenzen: keine Buchhaltung, keine automatische Bestellung, keine automatische Weitergabe des Adressbuchs. Eine Anleitung kann einer Anlage und mehreren Vorgängen zugeordnet werden; allgemeine Anleitungen bleiben möglich. Keine Datenbankintegration in SAP. Anlage bleibt fachlicher Bezug, ein Vorgang beschreibt Arbeit/Störung und eine Bestellung tatsächlichen Materialbedarf. SAPs Objektbezüge dienten lediglich als fachliche Orientierung: https://help.sap.com/docs/SAP_S4HANA_ON-PREMISE/efc7922405fd4d56b7571930c5eaa798/f2c7b65334e6b54ce10000000a174cb4.html
+
+Weiterhin offen: reale Geräteabnahme, stabile Release-Signierung, vollständige iOS-App. Keine biometrische Gerätefreigabe aus Emulatorprüfungen ableiten.

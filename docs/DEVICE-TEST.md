@@ -137,3 +137,14 @@ APK `WerkLog-0.4.2-Test.apk`, SHA-256 `faa198f813930df7147d07351c447cd4d7430fac7
 - [ ] Prozessneustart während externer Kamera (Android stellt Instanzzustand wieder her): Passwort erforderlich, Aufnahme innerhalb 15 Minuten wieder aufnehmbar.
 - [ ] Foto in Vollbild öffnen, mit zwei Fingern vergrößern/verschieben, Zurücksetzen, Schließen; Screenshot-Schutz.
 - [ ] Lange Anleitung: Schritt-Knopf bleibt oben erreichbar, Anleitungseinstellungen stehen unter den Schritten.
+
+## Abnahme 0.5.0
+
+- Störung mit Notiz öffnen, Text ändern, Teileanforderung starten: geänderter Hintergrund separat, keine Position; erstes Teil leer, Anlage vorbelegt. Grundinformationen bearbeiten. E-Mail-Vorschau ohne private Notiz/Anlagenkontakt.
+- Kontakt anlegen; mehreren Anlagen und einem Vorgang zuordnen. Von jeder Seite Kontakt öffnen, vom Kontakt Anlage/Vorgang öffnen. Verknüpfung entfernen und Löschung prüfen.
+- Anleitung einer bestehenden Anlage zuordnen; aus Anlagenakte öffnen. Anleitung einem Vorgang zuordnen; Rückverweis in Anleitung prüfen.
+- Anlagenbild aufnehmen/ersetzen, Vollbild öffnen, nach Sperren und Sicherungswiederherstellung prüfen. Gemeinsame Bildgrenze 500.
+- 40+ Anlagen: kompakte Liste, Suchbegriff, Gewerkfilter, Favoriten und Bildvorschau prüfen.
+- Gewerke hinzufügen/umbenennen/löschen; Ersatzgewerk wählen, betroffene Anlagen prüfen.
+- Unfertigen Arbeitsschritt eingeben, App verlassen, Prozess/Activity neu erstellen und entsperren: Seite, Dialog, Schritt und Text erhalten. Danach bewusst speichern oder abbrechen.
+- Auf echter Hardware: eingerichtete Biometrie startet beim Entsperrbildschirm automatisch, Abbrechen erlaubt Passworteingabe ohne Prompt-Schleife.

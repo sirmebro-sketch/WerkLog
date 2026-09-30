@@ -140,6 +140,41 @@ class NavigationTest {
             org.junit.Assert.assertEquals(2, scenarioModel.data!!.work.guides.last().steps.size)
             ui.onNodeWithText("Speichern").performClick()
             ui.waitUntil(15000) { !scenarioModel.busy && scenarioModel.data!!.work.guides.last().steps.size == 3 }
+            ui.onNodeWithText("Heute", useUnmergedTree = true).performClick()
+            ui.onNodeWithText("+ Störung").performScrollTo().performClick()
+            ui.onNodeWithText("Kurzbeschreibung *").performTextInput("Prüfstörung")
+            ui.onNodeWithText("Beobachtung, Maßnahmen, nächste Schritte").performTextInput("Interner Bestellhintergrund")
+            ui.onNodeWithText("Speichern").performClick()
+            ui.waitUntil(15000) { !scenarioModel.busy && scenarioModel.data!!.entries.size == 1 }
+            ui.onNodeWithText("Öffnen & bearbeiten").performScrollTo().performClick()
+            ui.onNodeWithText("Teileanforderung aus diesem Vorgang").performScrollTo().performClick()
+            ui.waitUntil(15000) { ui.onAllNodesWithText("Grundinformationen bearbeiten").fetchSemanticsNodes().isNotEmpty() }
+            org.junit.Assert.assertTrue(scenarioModel.data!!.work.orders.single().items.isEmpty())
+            org.junit.Assert.assertEquals("Interner Bestellhintergrund", scenarioModel.data!!.work.orders.single().context)
+            ui.onNodeWithText("+ Nächstes Teil").performScrollTo().performClick()
+            ui.onNodeWithText("Teil / Ausrüstung / Artikelnummer *").performTextInput("Testdichtung")
+            ui.onNodeWithText("Speichern").performClick()
+            ui.waitUntil(15000) { !scenarioModel.busy && scenarioModel.data!!.work.orders.single().items.size == 1 }
+            org.junit.Assert.assertEquals(scenarioModel.data!!.assets.single().id, scenarioModel.data!!.work.orders.single().items.single().assetId)
+            ui.onNodeWithText("Betrieb", useUnmergedTree = true).performClick()
+            ui.onNodeWithText("Adressbuch", substring = false).performScrollTo().performClick()
+            ui.onNodeWithText("+ Kontakt").performClick()
+            ui.onNodeWithText("Name *").performTextInput("Service Testperson")
+            ui.onNodeWithText("Anlagen · 0 zugeordnet ▾").performScrollTo().performClick()
+            ui.onAllNodes(isToggleable()).onFirst().performClick()
+            ui.onNodeWithText("Störungen / Arbeiten · 0 zugeordnet ▾").performScrollTo().performClick()
+            ui.onAllNodes(isToggleable()).onLast().performScrollTo().performClick()
+            ui.onNodeWithText("Speichern").performClick()
+            ui.waitUntil(15000) { !scenarioModel.busy && scenarioModel.data!!.contacts.size == 1 }
+            org.junit.Assert.assertEquals(1, scenarioModel.data!!.contacts.single().assetIds.size)
+            org.junit.Assert.assertEquals(1, scenarioModel.data!!.contacts.single().entryIds.size)
+            ui.onNodeWithText("Prüfanlage geändert", substring = false).performScrollTo().performClick()
+            ui.onNodeWithText("Service Testperson", substring = false).assertExists()
+            ui.onNodeWithText("Service Testperson", substring = false).performScrollTo().performClick()
+            ui.onNodeWithText("Zugeordnete Störungen / Arbeiten").assertExists()
+            ui.onRoot().captureToImage().asAndroidBitmap().let { bitmap ->
+                File(requireNotNull(InstrumentationRegistry.getArguments().getString("additionalTestOutputDir")), "kontakte.png").outputStream().use { bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it) }
+            }
             } catch (failure: Throwable) {
                 println("TEST DIAGNOSTIC busy=${diagnosticModel.busy} unlocked=${diagnosticModel.data != null} exists=${diagnosticModel.exists} error=${diagnosticModel.error} page=${diagnosticModel.workspacePage.intValue}")
                 runCatching { println(ui.onRoot().printToString()) }
