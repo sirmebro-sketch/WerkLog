@@ -63,9 +63,13 @@ Anlage oder Wissenseintrag verschlüsselt mit separatem Zufallscode teilen; Pass
 
 ## Qualität und verbleibende Arbeit
 
-Am 30.09.2026 für 0.6.1 erfolgreich: [Android-Build mit 56 JVM-Tests, Lint und APK-Netzwerkprüfung](https://github.com/sirmebro-sketch/WerkLog/actions/runs/36741464594) und [drei Android-15-Instrumentierungstests](https://github.com/sirmebro-sketch/WerkLog/actions/runs/36741464566). Der neue Rastertest prüft alle neun Kacheln bei 320 dp Breite und 100 %/180 % Schrift auf gleiche Maße, Textüberläufe und funktionierende Aufrufe. Der Bedienablauf prüft Rückwege zwischen Kontakt/Anlage und Störung/Anleitung einschließlich Sperren/Entsperren und die direkte Folgeterminbearbeitung. Die bisherigen Prüfungen für Speicherfehler mit erhaltenem Formulartext, verschlüsselte Formularwiederaufnahme, Kamera-Rückgabe nach Activity-Neuerstellung, Passwortwechsel, Bestellungen und JPEG-Anlagenimport bleiben erfolgreich. Betrieb, Raster mit großer Schrift, Führung und Adressbuch wurden visuell geprüft. Physische Einhandbedienung, TalkBack, Kamera, reale Zählererkennung, Biometrie und Mail-App brauchen weiterhin die S24-Ultra-Abnahme.
+Am 30.09.2026 für 0.7.0 erfolgreich: [Android-Build mit 64 JVM-Tests, Lint und APK-Netzwerkprüfung](https://github.com/sirmebro-sketch/WerkLog/actions/runs/36776822398) und [vier Android-15-Instrumentierungstests](https://github.com/sirmebro-sketch/WerkLog/actions/runs/36776822241). Die Farbprüfungen sichern die zentralen Text- und Konturkontraste sowie die Statusbedeutungen. Alle neun Betriebskacheln wurden mit allen vier produktiven Themes bei 320 dp Breite und 100 %/180 % Schrift auf gleiche Maße, Textüberläufe und funktionierende Aufrufe geprüft. Der neue Bedienablauf prüft sofortigen Farbwechsel, gespeicherte Auswahl, Systemoption, Leistenhelligkeit und erhaltenen Formulartext nach Farbwechsel, Sperren und Activity-Neuerstellung. Die bisherige Navigation, Speicherfehlerbehandlung, Kamera-Rückgabe, Passwortrotation, Bestellverknüpfung und JPEG-Anlagenfreigabe bleiben erfolgreich geprüft.
 
-APK `WerkLog-0.6.1-Test.apk`, SHA-256 `2bf0cbc9c45dcd3c21f8ee8de26528c24f68d52edba973f2b7d0664cc57dc750`. App-Quellstand: `c82aa315b164816439663b2b8c597b9ad0229d5d`.
+Bildschirmaufnahmen der vier Betrieb-Varianten sowie der hellen Einstellungen, Formulare, Heute-Ansicht, Kalender, Statusanzeigen, Anleitung, Vollbildfoto und Sperrmaske wurden visuell geprüft. Physische Einhandbedienung, TalkBack, Lichtverhältnisse, maximale Samsung-Anzeigeeinstellungen, Kamera, reale Zählererkennung, Biometrie und Mail-App brauchen weiterhin die S24-Ultra-Abnahme.
+
+APK `WerkLog-0.7.0-Test.apk`, 61.129.244 Bytes; SHA-256 `240bc65f3c9d4a969d9d25b6b00f3220bc1f851e01df4be52ae91315642d9df1`. Geprüfter App-Quellstand: `4d3762dffb753ab2421bc39197484a4f9bd60bbd`.
+
+- [Farbkonzepte und Prüfung 0.7.0](docs/UI-REVIEW-0.7.0.md)
 
 - [Design und Navigation 0.6.1](docs/UI-REVIEW-0.6.1.md)
 - [Gesamtprüfung und Verbesserungen 0.6.0](docs/AUDIT-0.6.0.md)

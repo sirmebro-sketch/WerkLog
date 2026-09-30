@@ -198,6 +198,15 @@ Zusätzliche Gerätechecks:
 
 ## Zusätzliche Geräteabnahme 0.7.0 — Farbkonzepte
 
+Automatisiert am 30.09.2026 am Quellstand `4d3762dffb753ab2421bc39197484a4f9bd60bbd`:
+
+- [x] [Android-Build](https://github.com/sirmebro-sketch/WerkLog/actions/runs/36776822398): 64 JVM-Tests, Lint, APK-Build und keine Netzwerkberechtigungen.
+- [x] [Android-15-Emulator](https://github.com/sirmebro-sketch/WerkLog/actions/runs/36776822241): vier Instrumentierungstests einschließlich aller vier Themes, lokaler Auswahl, Leistenhelligkeit und Formularwiederaufnahme.
+- [x] Acht Rasterdurchläufe mit 100 %/180 % Schrift: neun gleichmäßige Kacheln, keine Textüberläufe, funktionierende Aufrufe.
+- [x] Betrieb in vier Varianten und helle Einstellungen, Formular, Heute, Kalender, Status, Anleitung, Foto-Vollbild und Sperrmaske visuell geprüft.
+
+Test-APK `WerkLog-0.7.0-Test.apk`, SHA-256 `240bc65f3c9d4a969d9d25b6b00f3220bc1f851e01df4be52ae91315642d9df1`. Diese Ergebnisse ersetzen die nachfolgenden realen Gerätetests nicht.
+
 - [ ] Alle vier Konzepte unter Einstellung → Darstellung; sofortiger Wechsel und Auswahl nach Kaltstart.
 - [ ] Tageslicht draußen/bei Sonne und dunkle Varianten im Arbeitsbereich prüfen. Displayhelligkeit ist weiterhin die Geräteeinstellung.
 - [ ] Geräteeinstellung folgen: hell → Tageslicht; dunkel → zuletzt gewähltes dunkles Konzept. Manuelle Auswahl beendet die Automatik.

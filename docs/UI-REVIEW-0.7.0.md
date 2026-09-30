@@ -52,6 +52,16 @@ Dies bewertet konkrete Farbpaarungen, keine Zertifizierung der ganzen App. Trans
 
 ## Validierung
 
-Build, JVM-/Emulator-Prüfungen und Bildschirmaufnahmen werden für den finalen Quellstand ergänzt, sobald CI abgeschlossen ist. Der Rastertest verwendet alle vier produktiven Themes bei 100 %/180 % Schrift; der neue Bedienablauf prüft Auswahl, gespeicherte Präferenz, Leistenhelligkeit und ein ungespeichertes Formular über Farbwechsel, Sperren und Activity-Neuerstellung. Er erzeugt zusätzliche Aufnahmen für Tageslicht, Kalender, Status, Anleitung und Vollbildfoto. Bestehende Fach-, Tresor-, Import- und Navigationstests bleiben erhalten.
+Am 30.09.2026 erfolgreich am Quellstand `4d3762dffb753ab2421bc39197484a4f9bd60bbd`:
+
+- [Android-Build](https://github.com/sirmebro-sketch/WerkLog/actions/runs/36776822398): alle **64 JVM-Tests**, Lint, APK-Build und Prüfung ohne Internet-/Netzwerkstatus-Berechtigung bestanden.
+- [Android-15-Emulator](https://github.com/sirmebro-sketch/WerkLog/actions/runs/36776822241): alle **vier Instrumentierungstests** bestanden.
+- Acht Rasterdurchläufe: alle vier produktiven Themes bei 320 dp Breite und 100 %/180 % Schrift. Alle neun Kacheln gleichmäßig und ohne Textüberläufe, jeder Aufruf geprüft.
+- Tatsächliche Hintergründe der vier App-Themes, passende Leistenhelligkeit, sofortiger Wechsel, Auswahl nach Activity-Neuerstellung und Systemoption geprüft.
+- Ein ungespeichertes Anlagenformular über Farbwechsel, Sperren und Activity-Neuerstellung erhalten, verborgen während der Sperre, danach erfolgreich gespeichert. Der Zwischenstand bleibt verschlüsselt.
+- Bildschirmaufnahmen der vier Betrieb-Varianten, Raster mit großer Schrift sowie der hellen Einstellungen, Heute-Ansicht, Formular- und Kalenderansicht, Statusanzeigen, Anleitung, großen Fotoansicht und Sperrmaske visuell geprüft. Der Fototest öffnet ein zunächst eingeklapptes Bild ausdrücklich, wie im normalen Bedienablauf.
+- Bestehende Navigation, Rückwege, Speicherfehler, verschlüsselte Formularwiederaufnahme, simulierte Kamera-Rückgabe, Passwortwechsel, Bestellverknüpfung und JPEG-Kollegenimport weiterhin erfolgreich geprüft.
+
+Ausgelieferte APK: `WerkLog-0.7.0-Test.apk`, **61.129.244 Bytes**, SHA-256 `240bc65f3c9d4a969d9d25b6b00f3220bc1f851e01df4be52ae91315642d9df1`. Der heruntergeladene APK-Buildcontainer entspricht dem GitHub-Artefakt mit SHA-256 `2eb27ec98fae3ea26cf4418ed107fd166763a50d8e3b0d703555be4f958037eb`. Der Layoutcontainer wurde ebenfalls auf seine Artefakt-Prüfsumme geprüft.
 
 Weiterhin erforderlich: S24 Ultra bei tatsächlichem Umgebungslicht, Samsung-Schrift-/Anzeigeeinstellungen, TalkBack, Gesten-/Drei-Tasten-Navigation und reale Biometrie/Kamera/Mail-App. Datenschema 7 und Offline-Schutz bleiben unverändert. Vor einer Installation offene Formulare speichern und Vollsicherung erstellen; Debug-Signaturen können einen Neuinstallationsschritt nötig machen, der App-Daten löscht.
