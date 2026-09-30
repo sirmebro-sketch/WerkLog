@@ -293,8 +293,8 @@ private fun java.io.InputStream.readBytesLimited(): ByteArray {
 
 @Composable private fun Workspace(model: WorkModel, onExport: () -> Unit, onShare: (String, String) -> Unit, onShareFile: (File) -> Unit, onImport: () -> Unit, onPhoto: (PhotoTarget) -> Unit, onOrder: (PartsOrder) -> Unit, requestedAsset: String?, assetOpened: () -> Unit) {
     val d = model.data ?: return
-    var tool by rememberSaveable { mutableStateOf<String?>(null) }
-    var page by rememberSaveable { mutableIntStateOf(0) }
+    var tool by model.workspaceTool
+    var page by model.workspacePage
     var dialog by remember { mutableStateOf<String?>(null) }
     var selectedAssetId by remember { mutableStateOf<String?>(null) }
     var preselectedAssetId by remember { mutableStateOf<String?>(null) }
