@@ -1,4 +1,8 @@
-# Stand 0.6.0 — Umsetzung und Grenzen
+# Stand 0.6.1 — Umsetzung und Grenzen
+
+## Gestaltung und Bedienung 0.6.1
+
+Einheitliche adaptive Betriebskacheln, kurze Beschreibungen für alle Werkzeuge, regulärer Rasterplatz auch für die letzte Kachel. Die Auswahlmarkierung der Hauptnavigation verwendet die App-Farben. Fester Zurück-Pfeil und gemeinsame Android-Zurück-Logik; bei Verknüpfungen Rückkehr zum Ausgangsdatensatz, bei Listen/Details zur übergeordneten Seite. Rückweg beim Sperren verschlüsselt wiederaufnehmbar. Direktes Bearbeiten eines aus einer Störung erzeugten Folgetermins und Entsperren über die Tastatur. Details: [UI-REVIEW-0.6.1.md](UI-REVIEW-0.6.1.md).
 
 ## Gesamtprüfung 0.6.0
 

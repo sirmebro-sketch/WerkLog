@@ -2,7 +2,11 @@
 
 Lokaler Android-Companion für Servicetechniker, in **Kotlin und Jetpack Compose**. Kein Konto, keine Internetberechtigung, keine Java-Quelldateien. Öffentlich ist der Quellcode; Arbeitsdaten liegen ausschließlich im verschlüsselten Gerätespeicher.
 
-## 0.6.0 — Testversion nach Gesamtprüfung
+## 0.6.1 — Einheitliche Kacheln und klare Rückwege
+
+Alle Betriebskacheln haben dieselbe Größe, passende Beschreibungen und gemeinsame Text-/Symbolbereiche. Das Raster berücksichtigt große Systemschrift und lässt die letzte Kachel nicht über die ganze Zeile wachsen. Auch die aktive Markierung in der unteren Navigation verwendet die App-Farben. Ein fester Zurück-Pfeil führt aus Details zur Liste und bei Verknüpfungen zum Ausgangsdatensatz; diese Rückwege bleiben nach einer Sperre erhalten. Aus Störungen erzeugte Folgetermine öffnen direkt ihre Bearbeitung. Entsperren ist auch mit „Fertig“ an der Bildschirmtastatur möglich. Prüfung und Grenzen: [UI-Review 0.6.1](docs/UI-REVIEW-0.6.1.md).
+
+### Ergänzungen aus 0.6.0
 
 Neu: Fälligkeiten für Arbeiten/Störungen mit Anzeige in „Heute“, erwartete Lieferungen, Suchfelder für Anleitungen und Bestelllisten sowie Filter für offene/erledigte Bestellungen. Große Übersichten zeigen zunächst 40 Datensätze und laden weitere auf Wunsch nach; die Suche berücksichtigt alle Datensätze. Kontakte öffnen die Telefon- oder E-Mail-App ohne automatischen Anruf/Versand.
 
@@ -51,10 +55,11 @@ Anlage oder Wissenseintrag verschlüsselt mit separatem Zufallscode teilen; Pass
 
 ## Qualität und verbleibende Arbeit
 
-Am 30.09.2026 für 0.6.0 erfolgreich: [Android-Build mit 54 JVM-Tests, Lint und APK-Netzwerkprüfung](https://github.com/sirmebro-sketch/WerkLog/actions/runs/36733266485) und [zwei Android-15-Instrumentierungstests](https://github.com/sirmebro-sketch/WerkLog/actions/runs/36733266511). Der Bedienablauf prüft unter anderem einen provozierten Dateisystemfehler mit erhaltenem Formulartext, verschlüsselte Formularwiederaufnahme nach Sperren, Kamera-Rückgabe nach Activity-Neuerstellung, Passwortwechsel, Bestellungen aus Störungen, beidseitige Kontakte und den Import eines echten JPEG-Anlagenbildes durch den produktiven ViewModel-Pfad. Ansichten von Betrieb, Führung und Adressbuch wurden visuell geprüft. Kamera, reale Zählererkennung, Biometrie und Mail-App brauchen weiterhin die S24-Ultra-Abnahme.
+Am 30.09.2026 für 0.6.1 erfolgreich: [Android-Build mit 56 JVM-Tests, Lint und APK-Netzwerkprüfung](https://github.com/sirmebro-sketch/WerkLog/actions/runs/36741464594) und [drei Android-15-Instrumentierungstests](https://github.com/sirmebro-sketch/WerkLog/actions/runs/36741464566). Der neue Rastertest prüft alle neun Kacheln bei 320 dp Breite und 100 %/180 % Schrift auf gleiche Maße, Textüberläufe und funktionierende Aufrufe. Der Bedienablauf prüft Rückwege zwischen Kontakt/Anlage und Störung/Anleitung einschließlich Sperren/Entsperren und die direkte Folgeterminbearbeitung. Die bisherigen Prüfungen für Speicherfehler mit erhaltenem Formulartext, verschlüsselte Formularwiederaufnahme, Kamera-Rückgabe nach Activity-Neuerstellung, Passwortwechsel, Bestellungen und JPEG-Anlagenimport bleiben erfolgreich. Betrieb, Raster mit großer Schrift, Führung und Adressbuch wurden visuell geprüft. Physische Einhandbedienung, TalkBack, Kamera, reale Zählererkennung, Biometrie und Mail-App brauchen weiterhin die S24-Ultra-Abnahme.
 
-APK `WerkLog-0.6.0-Test.apk`, SHA-256 `800cbd04c8fe99f47ddaa9c6d9af2ac2f3d358e8db39679b6b57c187dc9ecf9f`. App-Quellstand: `40fd5ee2370e82ae02c35e6eb7d827671330d1db`.
+APK `WerkLog-0.6.1-Test.apk`, SHA-256 `2bf0cbc9c45dcd3c21f8ee8de26528c24f68d52edba973f2b7d0664cc57dc750`. App-Quellstand: `c82aa315b164816439663b2b8c597b9ad0229d5d`.
 
+- [Design und Navigation 0.6.1](docs/UI-REVIEW-0.6.1.md)
 - [Gesamtprüfung und Verbesserungen 0.6.0](docs/AUDIT-0.6.0.md)
 - [Umsetzung und offene Punkte](docs/ROADMAP.md)
 - [Geräteabnahme](docs/DEVICE-TEST.md)

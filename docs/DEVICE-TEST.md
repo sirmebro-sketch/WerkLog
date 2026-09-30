@@ -1,6 +1,6 @@
 # Abnahme auf Samsung Galaxy S24 Ultra
 
-Status 0.4.0: Automatisierte Ergebnisse siehe unten. Die nachfolgenden Geräte-Checklisten bleiben bis zum tatsächlichen S24-Ultra-Test offen.
+Automatisierte Ergebnisse stehen nach Versionen geordnet unten. Die Geräte-Checklisten bleiben bis zum tatsächlichen S24-Ultra-Test offen; Emulatorprüfungen schließen sie nicht ab.
 
 - [x] Frühere Abnahme 0.3.0: 29 JVM-Tests, lintDebug, assembleDebug und APK-Netzwerkberechtigungsprüfung erfolgreich (Run 36580771959).
 - [ ] Installieren; Passwort anlegen; Start ohne Internet möglich.
@@ -175,3 +175,22 @@ Zusätzliche Gerätechecks:
 - [ ] Nach Restore Biometrie neu aktivieren; falsches Backup-Passwort verändert die bestehende Anlage nicht.
 
 APK `WerkLog-0.6.0-Test.apk`, SHA-256 `800cbd04c8fe99f47ddaa9c6d9af2ac2f3d358e8db39679b6b57c187dc9ecf9f`. App-Quellstand `40fd5ee2370e82ae02c35e6eb7d827671330d1db`. Vor einer möglichen Neuinstallation offene Formulare speichern und Vollsicherung exportieren. Geräteabhängige Kamera/OCR/Biometrie/Mail sowie stabile Release-Signatur bleiben offen.
+
+
+## Abnahme 0.6.1 — Design und Navigation
+
+Am 30.09.2026 erfolgreich am App-Quellstand `c82aa315b164816439663b2b8c597b9ad0229d5d`: [56 JVM-Tests, Lint, APK-Build und Netzwerkberechtigungsprüfung](https://github.com/sirmebro-sketch/WerkLog/actions/runs/36741464594) sowie [alle drei Android-15-Instrumentierungstests](https://github.com/sirmebro-sketch/WerkLog/actions/runs/36741464566). Alle neun gerenderten Kacheln bei 320 dp/100 % und 180 % Schrift haben gleiche Maße, vollständig dargestellte Texte und funktionieren beim Aufruf. Kontakt → Anlage → Zurück, Störung → Anleitung → Sperren/Entsperren → Zurück mit erhaltenem Text und direkte Folgeterminbearbeitung wurden geprüft. Aktuelle Aufnahmen von Betrieb, Führung, Kontakten und normaler/großer Schrift wurden visuell kontrolliert.
+
+APK `WerkLog-0.6.1-Test.apk`, SHA-256 `2bf0cbc9c45dcd3c21f8ee8de26528c24f68d52edba973f2b7d0664cc57dc750`. Details zu Gestaltung, Rückwegen und Prüfgrenzen: [UI-REVIEW-0.6.1.md](UI-REVIEW-0.6.1.md). Vor einer möglichen Neuinstallation Vollsicherung erstellen; Deinstallation löscht App-Daten.
+
+Zusätzliche Gerätechecks:
+
+- [ ] Betrieb bei Standardschrift: neun gleich große Kacheln, letzte Kachel im regulären Rasterplatz, gleichmäßig ausgerichtete Titel/Beschreibungen; Blau-/Mint-Auswahl in der Hauptnavigation.
+- [ ] Systemschrift 180 % und größere Anzeige: Raster ggf. einspaltig, alle Bezeichnungen vollständig, letzte Kachel durch Scrollen erreichbar. Querformat sowie maximale Samsung-Schrift-/Anzeigegröße gesondert prüfen.
+- [ ] Mit einer Hand: ganze Kachel antippbar, feste Hauptnavigation und Zurück/Sperren erreichbar; keine versehentlichen Aktionen beim Scrollen.
+- [ ] TalkBack: jede Kachel als Schaltfläche mit verständlichem Titel/Hinweis, sinnvolle Fokusreihenfolge, Navigation und Dialoge erreichbar.
+- [ ] Kontakt → Anlage → Zurück: gleicher Kontakt wieder offen. Anlage → Anleitung → Zurück: gleiche Anlage und vorherige Scrollposition.
+- [ ] Geöffnete Störung mit geändertem Text → zugeordnete Anleitung → App sperren/entsperren → Zurück: gespeicherter Text und geöffnete Störung wieder vorhanden.
+- [ ] Folgetermin aus Störung: Bearbeitung des richtigen neu erzeugten Termins geöffnet; Termin speichern/abbrechen und zur Störung zurückkehren.
+- [ ] Tastatur: Entsperren mit „Fertig“, falsches Passwort bleibt abgewiesen; beim Einrichten „Weiter“ und „Fertig“ mit Passwortwiederholung.
+- [ ] Navigation Heute/Betrieb/Einstellung setzt den jeweiligen Hauptbereich auf seine Startseite; normale Android-Zurück-Geste und Kopf-Pfeil führen gleich zurück.
