@@ -24,6 +24,8 @@ class AuditTest {
         val grandchild = a.copy(id = newId(), parentId = child.id)
         val other = a.copy(id = newId())
         assertEquals(listOf(other), validParents(listOf(a, child, grandchild, other), a.id))
+        validateData(Data(assets = listOf(a, child, grandchild, other)))
+        assertThrows(IllegalArgumentException::class.java) { validateData(Data(assets = listOf(a.copy(parentId = grandchild.id), child, grandchild))) }
         assertEquals("werklog:asset:${a.id}", assetCode(a.copy(tag = "x".repeat(5000))))
     }
     @Test fun oldRecurringDatesStillProduceCurrentOccurrences() {
@@ -37,5 +39,7 @@ class AuditTest {
         val entry = Entry(assetId = a.id, title = "Test", note = "")
         assertThrows(IllegalArgumentException::class.java) { validateData(Data(assets = listOf(a), entries = listOf(entry, entry))) }
         assertThrows(IllegalArgumentException::class.java) { validateData(Data(assets = listOf(a), entries = listOf(entry.copy(dueDate = "31.02.2026")))) }
+        assertThrows(IllegalArgumentException::class.java) { validateData(Data(assets = listOf(a), entries = listOf(entry.copy(guideIds = listOf("missing"))))) }
+        assertThrows(IllegalArgumentException::class.java) { validateData(Data(work = WorkData(orders = listOf(PartsOrder(title = "Test", entryId = "missing"))))) }
     }
 }

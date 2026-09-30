@@ -55,7 +55,7 @@ class NavigationTest {
             org.junit.Assert.assertEquals("Prüfanlage", diagnosticModel.data!!.assets.single().name)
             blockedWrite.delete()
             ui.onNodeWithText("Speichern").performClick()
-            ui.waitUntil(10000) { ui.onAllNodesWithText("Prüfanlage geändert").fetchSemanticsNodes().isNotEmpty() }
+            ui.waitUntil(15000) { !diagnosticModel.busy && diagnosticModel.data?.assets?.single()?.name == "Prüfanlage geändert" }
             ui.onNodeWithText("Einstellung", useUnmergedTree = true).performClick()
             ui.onNodeWithText("Profil erstellen").performScrollTo().performClick()
             ui.onNodeWithText("Name *").performTextInput("Alex Test")

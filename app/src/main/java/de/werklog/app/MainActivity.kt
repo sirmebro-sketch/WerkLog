@@ -167,7 +167,12 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
                         val pending = readyPhoto!!
                         PhotoReview(pending.first, pending.second, model.data!!, model.busy, { pending.first.delete(); readyPhoto = null }, { requestedAsset = it; pending.first.delete(); readyPhoto = null }, DataSaver { next, done -> model.update(next, done) })
                     }
-                    if (model.data != null && importBytes != null) ImportAssetDialog(importBytes!!, model.data!!, model.busy, { importBytes?.delete(); importBytes = null }) { incoming, target, replace, done -> model.importShare(incoming, target, replace, done) }
+                    if (model.data != null && importBytes != null) {
+                        val source = importBytes!!
+                        key(source.path) { ImportAssetDialog(source, model.data!!, model.busy, {
+                            source.delete(); if (importBytes == source) importBytes = null
+                        }) { incoming, target, replace, done -> model.importShare(incoming, target, replace, done) } }
+                    }
                 }
                 }
                 }
@@ -224,11 +229,12 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
     private fun readShare(uri: Uri) {
         if (uri.scheme != "content") { model.error = "Bitte eine lokale Freigabedatei über den Dateidialog öffnen."; return }
         lifecycleScope.launch {
+            val file = File(cacheDir, "import-${newId()}.werkshare")
             try {
-                val file = File(cacheDir, "import-${newId()}.werkshare")
                 withContext(Dispatchers.IO) { contentResolver.openInputStream(uri)?.use { input -> file.outputStream().use { input.copyBounded(it, MAX_ARCHIVE_BYTES) } } ?: error("Kein Zugriff") }
+                importBytes?.delete()
                 importBytes = file
-            } catch (_: Exception) { model.error = "Anlagenfreigabe nicht lesbar oder größer als 384 MiB." }
+            } catch (_: Exception) { file.delete(); model.error = "Anlagenfreigabe nicht lesbar oder größer als 384 MiB." }
         }
     }
     private fun requestPhoto(target: PhotoTarget) { if (target.kind in listOf("meter", "asset")) takePhoto(target) else sourceTarget = target }
@@ -309,7 +315,7 @@ private fun java.io.InputStream.readBytesLimited(): ByteArray {
         }
         val activity = androidx.compose.ui.platform.LocalContext.current as MainActivity
         if (!creating && backup == null && activity.biometricAvailable()) OutlinedButton(onClick = activity::unlockBiometric, enabled = !model.busy, modifier = Modifier.fillMaxWidth()) { Text("Mit Fingerabdruck / Biometrie öffnen") }
-        TextButton(onClick = if (backup == null) onRestore else cancelRestore, enabled = !model.busy, modifier = Modifier.fillMaxWidth()) { Text(if (backup == null) "Verschlüsselte Sicherung laden" else "Wiederherstellung abbrechen") }
+        TextButton(onClick = { if (backup == null) onRestore() else { backup.delete(); cancelRestore() } }, enabled = !model.busy, modifier = Modifier.fillMaxWidth()) { Text(if (backup == null) "Verschlüsselte Sicherung laden" else "Wiederherstellung abbrechen") }
         Spacer(Modifier.height(24.dp)); Text("OFFLINE  ·  OHNE KONTO  ·  VERSCHLÜSSELT", color = Mint, fontSize = 11.sp)
     }
 }
@@ -512,12 +518,12 @@ private fun java.io.InputStream.readBytesLimited(): ByteArray {
                 3 -> {
                     Hint("Eigene Checklisten für wiederkehrende Kontrollen. Ein übersprungener Punkt bleibt ausdrücklich als ungeprüft dokumentiert.")
                     Button(onClick = { editRound = null; dialog = "round" }, enabled = !model.busy) { Text("+ Checkliste erstellen") }
-                    d.rounds.forEach { r -> Panel { Text(r.title, fontSize = 21.sp, fontWeight = FontWeight.Bold); Text("${r.checks.size} Prüfpunkte", color = Muted)
+                    PagedRecords(d.rounds, "rounds", { it.id }) { r -> Panel { Text(r.title, fontSize = 21.sp, fontWeight = FontWeight.Bold); Text("${r.checks.size} Prüfpunkte", color = Muted)
                         Button(onClick = { run = r }, enabled = !model.busy) { Text("Rundgang starten") }
                         Row { TextButton(onClick = { editRound = r; dialog = "round" }, enabled = !model.busy) { Text("Bearbeiten") }; TextButton(onClick = { removal = "round" to r.id }, enabled = !model.busy) { Text("Löschen") } } } }
                     Section("Abgeschlossene Rundgänge")
                     if (d.runs.isEmpty()) Hint("Noch kein Rundgang dokumentiert.")
-                    d.runs.sortedByDescending { it.created }.forEach { r -> Panel { Text(r.title, fontWeight = FontWeight.Bold); Text(stamp(r.created), color = Muted)
+                    PagedRecords(d.runs.sortedByDescending { it.created }, "runs", { it.id }) { r -> Panel { Text(r.title, fontWeight = FontWeight.Bold); Text(stamp(r.created), color = Muted)
                         r.results.forEach { Text(it, modifier = Modifier.padding(top = 6.dp)) }; if (r.note.isNotBlank()) Text(r.note)
                         TextButton(onClick = { removal = "run" to r.id }, enabled = !model.busy) { Text("Protokoll löschen") }
                     } }
@@ -638,7 +644,7 @@ private fun java.io.InputStream.readBytesLimited(): ByteArray {
     val validEntry = title.isNotBlank() && asset.isNotEmpty() && minutes.toIntOrNull()?.let { it >= 0 } == true && (dueDate.isBlank() || parseServiceDate(dueDate) != null)
     fun current() = Entry(recordId, asset, title.trim(), note.trim(), priority, status, existing?.created ?: System.currentTimeMillis(), System.currentTimeMillis(), minutes.toIntOrNull() ?: 0, guideIds, dueDate.trim())
     val navigate = LocalRecordLink.current
-    CompositionLocalProvider(LocalSaving provides model.busy, LocalRecordLink provides { kind, id ->
+    CompositionLocalProvider(LocalSaving provides busy, LocalRecordLink provides { kind, id ->
         if (!busy && validEntry) {
             val e = current()
             saveData(data.copy(entries = data.entries.filterNot { it.id == e.id } + e)) { close(); navigate(kind, id) }

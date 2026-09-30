@@ -55,23 +55,31 @@ fun decode(bytes: ByteArray): Data {
 }
 fun validateData(d: Data) {
     val ids = d.assets.map { it.id }.toSet()
-    require(ids.size == d.assets.size && d.assets.all { it.name.isNotBlank() })
-    require(d.entries.all { it.assetId in ids && it.status in statuses && it.priority in priorities && it.minutes >= 0 && (it.dueDate.isBlank() || parseServiceDate(it.dueDate) != null) })
+    require(ids.size == d.assets.size && d.assets.all { it.id.isNotBlank() && it.name.isNotBlank() })
+    require(d.entries.all { it.title.isNotBlank() && it.assetId in ids && it.status in statuses && it.priority in priorities && it.minutes >= 0 && (it.dueDate.isBlank() || parseServiceDate(it.dueDate) != null) })
     require(d.readings.all { it.assetId in ids && it.value.isFinite() })
-    require(d.rounds.all { it.checks.isNotEmpty() && it.checks.size <= 100 })
+    require(d.rounds.all { it.title.isNotBlank() && it.checks.isNotEmpty() && it.checks.size <= 100 })
     require(d.assets.all { it.nextService.isBlank() || parseServiceDate(it.nextService) != null })
     require(d.credentials.all { it.assetId in ids && it.title.isNotBlank() && it.password.isNotEmpty() })
     require(d.infos.all { it.assetId in ids && it.title.isNotBlank() && it.body.isNotBlank() })
     require(d.credentials.map { it.id }.distinct().size == d.credentials.size)
     require(d.infos.map { it.id }.distinct().size == d.infos.size)
+    val byId = d.assets.associateBy { it.id }; val acyclic = mutableSetOf<String>()
     d.assets.forEach { asset ->
-        val visited = mutableSetOf(asset.id); var parent = asset.parentId
-        while (parent.isNotEmpty()) { require(parent in ids && visited.add(parent)) { "Ungültige Anlagenhierarchie" }; parent = d.assets.single { it.id == parent }.parentId }
+        val visited = mutableSetOf<String>(); var parent = asset.id
+        while (parent.isNotEmpty() && parent !in acyclic) {
+            require(parent in ids && visited.add(parent)) { "Ungültige Anlagenhierarchie" }
+            parent = byId.getValue(parent).parentId
+        }
+        acyclic.addAll(visited)
     }
     validateRelations(d)
     validateImages(d)
     validateProfile(d.profile)
     validateWork(d.work, ids)
     for (records in listOf(d.entries.map { it.id }, d.readings.map { it.id }, d.rounds.map { it.id }, d.runs.map { it.id })) require(records.size == records.distinct().size) { "Doppelte Datensatz-ID" }
+    require((d.entries.map { it.id } + d.readings.map { it.id } + d.rounds.map { it.id } + d.runs.map { it.id } + d.credentials.map { it.id } + d.infos.map { it.id }).all(String::isNotBlank))
+    require(d.entries.all { e -> e.guideIds.all { id -> d.work.guides.any { it.id == id } } })
+    require(d.work.orders.all { o -> o.entryId.isBlank() || d.entries.any { it.id == o.entryId } })
     require(d.readings.all { r -> r.meterId.isEmpty() || d.work.meters.any { it.id == r.meterId && it.assetId == r.assetId } })
 }

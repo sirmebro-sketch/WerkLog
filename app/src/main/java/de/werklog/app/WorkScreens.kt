@@ -102,7 +102,7 @@ import java.util.Locale
     Button(onClick = { selected = null; editing = true }, enabled = !busy) { Text("+ Termin") }
     val events = d.work.appointments.flatMap { occurrences(it, if (all) LocalDate.now() else day, if (all) LocalDate.now().plusMonths(6) else day) }.sortedBy { appointmentTime(it.start) }
     if (events.isEmpty()) Hint("Keine Termine für diese Auswahl.")
-    events.forEach { event -> Panel {
+    PagedRecords(events, "$day:$all", { "${it.id}:${it.start}" }) { event -> Panel {
         Text(event.title, fontSize = 20.sp, fontWeight = FontWeight.Bold); Text("${event.start} · ${event.minutes} min · ${event.status}", color = Mint)
         if (event.company.isNotBlank()) Text("Fremdfirma: ${event.company}")
         if (event.responsible.isNotBlank()) Text("Zuständig: ${event.responsible}")

@@ -57,7 +57,8 @@ val LocalRecordLink = staticCompositionLocalOf<(String, String) -> Unit> { { _, 
     if (contact == null) {
         Field(query, { query = it }, "Name, Firma oder Aufgabe suchen")
         Button(onClick = { selected = null; editing = true }, enabled = !busy) { Text("+ Kontakt") }
-        d.contacts.filter { listOf(it.name, it.company, it.role).any { s -> s.contains(query, true) } }.sortedBy { it.name.lowercase() }.forEach { c ->
+        val results = d.contacts.filter { listOf(it.name, it.company, it.role).any { s -> s.contains(query, true) } }.sortedBy { it.name.lowercase() }
+        PagedRecords(results, query, { it.id }) { c ->
             OutlinedButton(onClick = { selected = c.id }, modifier = Modifier.fillMaxWidth()) {
                 Column(Modifier.fillMaxWidth()) { Text(c.name, fontWeight = FontWeight.Bold); Text(listOf(c.company, c.role).filter(String::isNotBlank).joinToString(" · ")) }
             }
@@ -133,7 +134,15 @@ val LocalRecordLink = staticCompositionLocalOf<(String, String) -> Unit> { { _, 
     LaunchedEffect(image) {
         bitmap = runCatching {
             val bytes = if (isImageRef(image)) loader(image) else java.util.Base64.getDecoder().decode(image)
-            try { android.graphics.BitmapFactory.decodeByteArray(bytes, 0, bytes.size, android.graphics.BitmapFactory.Options().apply { inSampleSize = 8 }) }
+            try {
+                require(bytes.size <= MAX_IMAGE_BYTES)
+                val bounds = android.graphics.BitmapFactory.Options().apply { inJustDecodeBounds = true }
+                android.graphics.BitmapFactory.decodeByteArray(bytes, 0, bytes.size, bounds)
+                require(bounds.outWidth in 1..4096 && bounds.outHeight in 1..4096)
+                var sample = 1
+                while (maxOf(bounds.outWidth, bounds.outHeight) / sample > 96) sample *= 2
+                android.graphics.BitmapFactory.decodeByteArray(bytes, 0, bytes.size, android.graphics.BitmapFactory.Options().apply { inSampleSize = sample })
+            }
             finally { bytes.fill(0) }
         }.getOrNull()
     }

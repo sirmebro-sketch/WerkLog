@@ -64,7 +64,7 @@ fun validateWork(w: WorkData, assetIds: Set<String>) {
         val bytes = Base64.getDecoder().decode(value)
         validateImageBytes(bytes)
     }
-    for (ids in listOf(w.meters.map { it.id }, w.appointments.map { it.id }, w.guides.map { it.id }, w.orders.map { it.id }, w.guides.flatMap { it.steps.map { s -> s.id } }, w.orders.flatMap { it.items.map { x -> x.id } })) require(ids.size == ids.distinct().size)
+    for (ids in listOf(w.meters.map { it.id }, w.appointments.map { it.id }, w.guides.map { it.id }, w.orders.map { it.id }, w.templates.map { it.id }, w.guides.flatMap { it.steps.map { s -> s.id } }, w.orders.flatMap { it.items.map { x -> x.id } })) require(ids.size == ids.distinct().size && ids.all(String::isNotBlank))
 }
 fun attachImage(data: Data, target: PhotoTarget, image: String): Data {
     if (target.kind == "profile") return data.copy(profile = data.profile.copy(image = image).also(::validateProfile))
