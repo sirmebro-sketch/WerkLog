@@ -44,7 +44,7 @@ fun mergePackage(current: Data, incoming: Data, target: String, replace: Boolean
         // Receiver's asset identity, hierarchy and favorites stay local. Explicit merge concerns contents.
         infos = combine(current.infos, incoming.infos.map { it.copy(id = id("info", it.id, current.infos.filter { x -> x.assetId == target }.map { x -> x.id }), assetId = target) }, { it.id }),
         credentials = combine(current.credentials, incoming.credentials.map { it.copy(id = id("credential", it.id, current.credentials.filter { x -> x.assetId == target }.map { x -> x.id }), assetId = target) }, { it.id }),
-        entries = combine(current.entries, incoming.entries.map { it.copy(id = id("entry", it.id, current.entries.filter { x -> x.assetId == target }.map { x -> x.id }), assetId = target) }, { it.id }),
+        entries = combine(current.entries, incoming.entries.map { it.copy(id = id("entry", it.id, current.entries.filter { x -> x.assetId == target }.map { x -> x.id }), assetId = target, guideIds = it.guideIds.filter { g -> incoming.work.guides.any { x -> x.id == g } }.map { g -> id("guide", g, current.work.guides.filter { x -> x.assetId == target }.map { x -> x.id }) }) }, { it.id }),
         readings = combine(current.readings, incoming.readings.map { it.copy(id = id("reading", it.id, current.readings.filter { x -> x.assetId == target }.map { x -> x.id }), assetId = target, meterId = meterIds[it.meterId] ?: "") }, { it.id }),
         work = current.work.copy(meters = combine(current.work.meters, meters, { it.id }),
             guides = combine(current.work.guides, incoming.work.guides.map { g -> g.copy(id = id("guide", g.id, current.work.guides.filter { x -> x.assetId == target }.map { x -> x.id }), assetId = target, steps = g.steps.map { it.copy(id = importId(target, "step", it.id)) }) }, { it.id })))
@@ -55,13 +55,14 @@ val starterTemplates = listOf(
     EntryTemplate(id = "electric", name = "Elektrisches Betriebsmittel", title = "Befund Betriebsmittel", body = "Kennzeichnung:\nFehlerbild:\nDokumentierter Befund:\nErsetztes Teil / Artikelnummer:\nPrüfprotokoll-Ablage:\nWeitere Arbeit:", trade = "Alle"))
 
 fun removeAsset(d: Data, id: String): Data = d.copy(
+    contacts = d.contacts.map { c -> c.copy(assetIds = c.assetIds - id, entryIds = c.entryIds.filterNot { e -> d.entries.any { it.id == e && it.assetId == id } }) },
     assets = d.assets.filterNot { it.id == id }.map { if (it.parentId == id) it.copy(parentId = "") else it },
     entries = d.entries.filterNot { it.assetId == id }, readings = d.readings.filterNot { it.assetId == id },
     credentials = d.credentials.filterNot { it.assetId == id }, infos = d.infos.filterNot { it.assetId == id },
     work = d.work.copy(meters = d.work.meters.filterNot { it.assetId == id },
         appointments = d.work.appointments.map { if (it.assetId == id) it.copy(assetId = "") else it },
         guides = d.work.guides.map { if (it.assetId == id) it.copy(assetId = "") else it },
-        orders = d.work.orders.map { o -> o.copy(items = o.items.map { if (it.assetId == id) it.copy(assetId = "") else it }) }))
+        orders = d.work.orders.map { o -> o.copy(assetId = if (o.assetId == id) "" else o.assetId, entryId = if (d.entries.any { it.id == o.entryId && it.assetId == id }) "" else o.entryId, items = o.items.map { if (it.assetId == id) it.copy(assetId = "") else it }) }))
 
 data class ImportChanges(val fresh: Int, val changed: Int, val unchanged: Int)
 /** Compare localized incoming identities. Call with image fingerprints for content comparison. */

@@ -14,13 +14,14 @@ import java.time.YearMonth
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 
-@Composable internal fun WorkTools(mode: String, data: Data, busy: Boolean, back: () -> Unit, save: (Data) -> Unit, photo: (PhotoTarget) -> Unit, mailOrder: (PartsOrder) -> Unit) {
+@Composable internal fun WorkTools(mode: String, data: Data, busy: Boolean, back: () -> Unit, save: (Data) -> Unit, photo: (PhotoTarget) -> Unit, mailOrder: (PartsOrder) -> Unit, initialId: String? = null, consumed: () -> Unit = {}) {
     TextButton(onClick = back) { Text("‹ Zurück") }
     when (mode) {
         "Zähler" -> MeterScreen(data, busy, save, photo)
         "Kalender" -> CalendarScreen(data, busy, save)
-        "Anleitungen" -> GuideScreen(data, busy, save, photo)
-        "Bestellungen" -> OrderScreen(data, busy, save, photo, mailOrder)
+        "Anleitungen" -> GuideScreen(data, busy, save, photo, initialId, consumed)
+        "Bestellungen" -> OrderScreen(data, busy, save, photo, mailOrder, initialId, consumed)
+        "Adressbuch" -> ContactScreen(data, busy, save, initialId, consumed)
         "Textvorlagen" -> TemplateScreen(data, busy, save)
     }
 }
@@ -138,8 +139,9 @@ import java.util.Locale
 
 val LocalGuideStepAction = staticCompositionLocalOf<((() -> Unit)?) -> Unit> { {} }
 
-@Composable private fun GuideScreen(d: Data, busy: Boolean, save: (Data) -> Unit, photo: (PhotoTarget) -> Unit) {
+@Composable private fun GuideScreen(d: Data, busy: Boolean, save: (Data) -> Unit, photo: (PhotoTarget) -> Unit, initialId: String?, consumed: () -> Unit) {
     var selected by rememberSaveable { mutableStateOf<String?>(null) }; var editor by rememberSaveable { mutableStateOf(false) }
+    LaunchedEffect(initialId) { if (initialId != null) { selected = initialId; consumed() } }
     var stepEditor by rememberSaveable { mutableStateOf(false) }; var selectedStep by rememberSaveable { mutableStateOf<GuideStep?>(null) }
     var deletion by rememberSaveable { mutableStateOf<GuideStep?>(null) }
     var deleteGuide by rememberSaveable { mutableStateOf(false) }
@@ -165,11 +167,13 @@ val LocalGuideStepAction = staticCompositionLocalOf<((() -> Unit)?) -> Unit> { {
     } else {
         TextButton(onClick = { selected = null }) { Text("‹ Alle Anleitungen") }
         Text(guide.title, fontSize = 24.sp, fontWeight = FontWeight.Bold)
+        if (guide.assetId.isNotBlank()) RecordLink("Anlagen", guide.assetId, "Anlage: ${assetName(d, guide.assetId)}")
+        d.entries.filter { guide.id in it.guideIds }.forEach { RecordLink("Vorgang", it.id, "Verwendet bei: ${it.title}") }
         Text("Version ${guide.revision} · Geprüft: ${guide.checked.ifBlank { "Noch nicht" }}", color = Muted)
         guide.steps.forEachIndexed { index, step -> Panel {
             Text("${index + 1}. ${step.title}", fontSize = 20.sp, fontWeight = FontWeight.Bold); Text(step.body); StoredPhoto(step.image)
             Row { TextButton(onClick = { selectedStep = step; stepEditor = true }, enabled = !busy) { Text("Bearbeiten") }
-                TextButton(onClick = { photo(PhotoTarget("guide", step.id)) }, enabled = !busy && (step.image.isNotEmpty() || imageCount(d.work) < MAX_IMAGES)) { Text(if (step.image.isEmpty()) "+ Foto" else "Foto ersetzen") } }
+                TextButton(onClick = { photo(PhotoTarget("guide", step.id)) }, enabled = !busy && (step.image.isNotEmpty() || imageValues(d).count { it.isNotEmpty() } < MAX_IMAGES)) { Text(if (step.image.isEmpty()) "+ Foto" else "Foto ersetzen") } }
             Row { TextButton(onClick = { val steps = guide.steps.toMutableList(); val previous = steps[index - 1]; steps[index - 1] = step; steps[index] = previous; update(guide.copy(steps = steps)) }, enabled = !busy && index > 0) { Text("Nach oben") }
                 if (step.image.isNotEmpty()) TextButton(onClick = { update(guide.copy(steps = guide.steps.map { if (it.id == step.id) it.copy(image = "") else it })) }, enabled = !busy) { Text("Bild entfernen") }
                 TextButton(onClick = { deletion = step }, enabled = !busy) { Text("Löschen") } }
@@ -180,7 +184,7 @@ val LocalGuideStepAction = staticCompositionLocalOf<((() -> Unit)?) -> Unit> { {
         if (guide.steps.isEmpty()) Hint("Füge oben den ersten Arbeitsschritt hinzu.")
         Hint("Bilder: max. 512 KiB pro Bild, insgesamt höchstens 500 Bilder für Anleitungen und Bestelllisten. Fotos erst nach dem Speichern des Schritts hinzufügen.")
     }
-    if (deleteGuide && guide != null) ConfirmRemoval("Anleitung löschen?", "Alle Schritte und Bilder dieser Anleitung werden entfernt.", busy, { deleteGuide = false }) { save(d.copy(work = d.work.copy(guides = d.work.guides.filterNot { it.id == guide.id }))); selected = null }
+    if (deleteGuide && guide != null) ConfirmRemoval("Anleitung löschen?", "Alle Schritte und Bilder dieser Anleitung werden entfernt.", busy, { deleteGuide = false }) { save(d.copy(entries = d.entries.map { it.copy(guideIds = it.guideIds - guide.id) }, work = d.work.copy(guides = d.work.guides.filterNot { it.id == guide.id }))); selected = null }
     if (editor) {
         var title by rememberSaveable { mutableStateOf(guide?.title ?: "") }; var asset by rememberSaveable { mutableStateOf(guide?.assetId ?: "") }
         Form("Anleitung", title.isNotBlank(), { editor = false }, { val next = (guide ?: Guide(title = title.trim())).copy(title = title.trim(), assetId = asset); update(next); selected = next.id; editor = false }) {
@@ -199,8 +203,9 @@ val LocalGuideStepAction = staticCompositionLocalOf<((() -> Unit)?) -> Unit> { {
         dismissButton = { TextButton(onClick = { deletion = null }) { Text("Abbrechen") } }) }
 }
 
-@Composable private fun OrderScreen(d: Data, busy: Boolean, save: (Data) -> Unit, photo: (PhotoTarget) -> Unit, mail: (PartsOrder) -> Unit) {
+@Composable private fun OrderScreen(d: Data, busy: Boolean, save: (Data) -> Unit, photo: (PhotoTarget) -> Unit, mail: (PartsOrder) -> Unit, initialId: String?, consumed: () -> Unit) {
     var selected by rememberSaveable { mutableStateOf<String?>(null) }; var editor by rememberSaveable { mutableStateOf(false) }
+    LaunchedEffect(initialId) { if (initialId != null) { selected = initialId; consumed() } }
     var itemEditor by rememberSaveable { mutableStateOf(false) }; var selectedItem by rememberSaveable { mutableStateOf<OrderItem?>(null) }
     var preview by rememberSaveable { mutableStateOf(false) }; var deletion by rememberSaveable { mutableStateOf<OrderItem?>(null) }
     var deleteOrder by rememberSaveable { mutableStateOf(false) }
@@ -213,13 +218,19 @@ val LocalGuideStepAction = staticCompositionLocalOf<((() -> Unit)?) -> Unit> { {
             TextButton(onClick = { selected = o.id }) { Text("Öffnen / weiter erfassen") } } }
     } else {
         TextButton(onClick = { selected = null }) { Text("‹ Alle Bestelllisten") }; Text(order.title, fontSize = 24.sp, fontWeight = FontWeight.Bold)
-        TextButton(onClick = { editor = true }, enabled = !busy) { Text("Titel / E-Mail-Adresse bearbeiten") }; TextButton(onClick = { deleteOrder = true }, enabled = !busy) { Text("Bestellliste löschen") }
+        Panel {
+            Text("Grundinformationen · nur lokal", fontWeight = FontWeight.Bold)
+            if (order.assetId.isNotBlank()) RecordLink("Anlagen", order.assetId, assetName(d, order.assetId))
+            d.entries.find { it.id == order.entryId }?.let { RecordLink("Vorgang", it.id, "Vorgang: ${it.title}") }
+            if (order.context.isNotBlank()) Text(order.context)
+            TextButton(onClick = { editor = true }, enabled = !busy) { Text("Grundinformationen bearbeiten") }
+        }; TextButton(onClick = { deleteOrder = true }, enabled = !busy) { Text("Bestellliste löschen") }
         order.items.forEachIndexed { index, item -> Panel {
             Text("${index + 1}. ${item.quantity} ${item.unit} · ${item.name}", fontSize = 19.sp, fontWeight = FontWeight.Bold)
             if (item.assetId.isNotBlank()) Text("Nur lokal: ${assetName(d, item.assetId)}", color = Mint)
             if (item.reason.isNotBlank()) Text(item.reason); StoredPhoto(item.image)
             Row { TextButton(onClick = { selectedItem = item; itemEditor = true }, enabled = !busy) { Text("Bearbeiten") }
-                TextButton(onClick = { photo(PhotoTarget("order", item.id)) }, enabled = !busy && (item.image.isNotEmpty() || imageCount(d.work) < MAX_IMAGES)) { Text(if (item.image.isEmpty()) "+ Foto" else "Foto ersetzen") } }
+                TextButton(onClick = { photo(PhotoTarget("order", item.id)) }, enabled = !busy && (item.image.isNotEmpty() || imageValues(d).count { it.isNotEmpty() } < MAX_IMAGES)) { Text(if (item.image.isEmpty()) "+ Foto" else "Foto ersetzen") } }
             Row { if (item.image.isNotEmpty()) TextButton(onClick = { update(order.copy(items = order.items.map { if (it.id == item.id) it.copy(image = "") else it })) }, enabled = !busy) { Text("Bild entfernen") }
                 TextButton(onClick = { deletion = item }, enabled = !busy) { Text("Entfernen") } }
         } }
@@ -233,14 +244,19 @@ val LocalGuideStepAction = staticCompositionLocalOf<((() -> Unit)?) -> Unit> { {
     if (deleteOrder && order != null) ConfirmRemoval("Bestellliste löschen?", "Alle Positionen und Bilder dieser lokalen Liste werden entfernt. Bereits versandte E-Mails bleiben unverändert.", busy, { deleteOrder = false }) { save(d.copy(work = d.work.copy(orders = d.work.orders.filterNot { it.id == order.id }))); selected = null }
     if (editor) {
         var title by rememberSaveable { mutableStateOf(order?.title ?: "") }; var recipient by rememberSaveable { mutableStateOf(order?.recipient ?: "") }; var delivery by rememberSaveable { mutableStateOf(order?.delivery ?: "") }
+        var asset by rememberSaveable { mutableStateOf(order?.assetId ?: "") }; var entry by rememberSaveable { mutableStateOf(order?.entryId ?: "") }; var context by rememberSaveable { mutableStateOf(order?.context ?: "") }
         Form("Bestellliste", (delivery.isBlank() || parseServiceDate(delivery) != null) && title.isNotBlank() && (recipient.isBlank() || (recipient.contains('@') && !recipient.contains('\n'))), { editor = false }, {
-            val next = (order ?: PartsOrder(title = title.trim())).copy(title = title.trim(), recipient = recipient.trim(), delivery = delivery.trim())
+            val next = (order ?: PartsOrder(title = title.trim())).copy(title = title.trim(), recipient = recipient.trim(), delivery = delivery.trim(), assetId = asset, entryId = entry, context = context.trim())
             update(next); selected = next.id; editor = false
-        }) { Field(title, { title = it }, "Titel *"); Field(recipient, { recipient = it }, "E-Mail Teamleiter (optional)"); Field(delivery, { delivery = it }, "Lieferdatum (TT.MM.JJJJ, optional)"); Hint("Leer lassen, wenn du den Empfänger erst in der E-Mail-App auswählen möchtest.") }
+        }) {
+            Picker("Anlage (nur lokal)", listOf("" to "Ohne Anlage") + d.assets.map { it.id to it.name }, asset) { asset = it; if (d.entries.find { e -> e.id == entry }?.assetId != asset) entry = "" }
+            Picker("Störung / Arbeit (nur lokal)", listOf("" to "Ohne Vorgang") + d.entries.filter { asset.isBlank() || it.assetId == asset }.map { it.id to it.title }, entry) { entry = it; d.entries.find { e -> e.id == it }?.let { e -> asset = e.assetId } }
+            Field(context, { context = it }, "Hintergrund / Grundinformationen (nur lokal)", 3)
+            Field(title, { title = it }, "Titel *"); Field(recipient, { recipient = it }, "E-Mail Teamleiter (optional)"); Field(delivery, { delivery = it }, "Lieferdatum (TT.MM.JJJJ, optional)"); Hint("Leer lassen, wenn du den Empfänger erst in der E-Mail-App auswählen möchtest.") }
     }
     if (itemEditor && order != null) {
         var name by rememberSaveable { mutableStateOf(selectedItem?.name ?: "") }; var quantity by rememberSaveable { mutableStateOf(selectedItem?.quantity ?: "1") }
-        var unit by rememberSaveable { mutableStateOf(selectedItem?.unit ?: "Stück") }; var reason by rememberSaveable { mutableStateOf(selectedItem?.reason ?: "") }; var asset by rememberSaveable { mutableStateOf(selectedItem?.assetId ?: "") }
+        var unit by rememberSaveable { mutableStateOf(selectedItem?.unit ?: "Stück") }; var reason by rememberSaveable { mutableStateOf(selectedItem?.reason ?: "") }; var asset by rememberSaveable { mutableStateOf(selectedItem?.assetId ?: order.assetId) }
         Form("Bestellposition", name.isNotBlank() && unit.isNotBlank() && number(quantity)?.let { it > 0 } == true, { itemEditor = false }, {
             val next = OrderItem(selectedItem?.id ?: newId(), name.trim(), quantity.trim(), unit.trim(), reason.trim(), asset, selectedItem?.image ?: "")
             update(order.copy(items = if (selectedItem == null) order.items + next else order.items.map { if (it.id == next.id) next else it })); itemEditor = false

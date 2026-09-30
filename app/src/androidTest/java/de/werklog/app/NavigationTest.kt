@@ -41,8 +41,8 @@ class NavigationTest {
             ui.onNodeWithText("+ Anlage anlegen").performClick()
             ui.onNodeWithText("Anlagenname *").performTextInput("Prüfanlage")
             ui.onNodeWithText("Speichern").performClick()
-            ui.waitUntil(10000) { ui.onAllNodesWithText("Anlagenakte öffnen").fetchSemanticsNodes().isNotEmpty() }
-            ui.onNodeWithText("Anlagenakte öffnen").performScrollTo().performClick()
+            ui.waitUntil(10000) { ui.onAllNodesWithContentDescription("Anlagenakte öffnen").fetchSemanticsNodes().isNotEmpty() }
+            ui.onNodeWithContentDescription("Anlagenakte öffnen").performScrollTo().performClick()
             ui.onNodeWithText("Anlageninformationen bearbeiten").performScrollTo().performClick()
             ui.onNodeWithText("Anlagenname *").performTextReplacement("Prüfanlage geändert")
             ui.onNodeWithText("Speichern").performClick()

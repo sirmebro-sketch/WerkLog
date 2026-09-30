@@ -10,10 +10,10 @@ val statuses = listOf("Offen", "In Arbeit", "Erledigt")
 val priorities = listOf("Normal", "Wichtig", "Dringend")
 data class Asset(val id: String = newId(), val name: String, val trade: String, val location: String, val note: String,
     val manufacturer: String = "", val model: String = "", val serial: String = "",
-    val contact: String = "", val spareParts: String = "", val nextService: String = "", val tag: String = "", val parentId: String = "", val favorite: Boolean = false, val lastOpened: Long = 0) : java.io.Serializable
+    val contact: String = "", val spareParts: String = "", val nextService: String = "", val tag: String = "", val parentId: String = "", val favorite: Boolean = false, val lastOpened: Long = 0, val coverImage: String = "") : java.io.Serializable
 data class Entry(val id: String = newId(), val assetId: String, val title: String, val note: String,
     val priority: String = "Normal", val status: String = "Offen", val created: Long = System.currentTimeMillis(),
-    val updated: Long = created, val minutes: Int = 0) : java.io.Serializable
+    val updated: Long = created, val minutes: Int = 0, val guideIds: List<String> = emptyList()) : java.io.Serializable
 data class Reading(val id: String = newId(), val assetId: String, val label: String, val value: Double,
     val unit: String, val note: String, val created: Long = System.currentTimeMillis(), val meterId: String = "", val reset: Boolean = false) : java.io.Serializable
 data class Round(val id: String = newId(), val title: String, val checks: List<String>) : java.io.Serializable
@@ -21,14 +21,15 @@ data class RoundRun(val id: String = newId(), val title: String, val results: Li
     val created: Long = System.currentTimeMillis()) : java.io.Serializable
 data class Data(val assets: List<Asset> = emptyList(), val entries: List<Entry> = emptyList(),
     val readings: List<Reading> = emptyList(), val rounds: List<Round> = emptyList(), val runs: List<RoundRun> = emptyList(),
-    val credentials: List<Credential> = emptyList(), val infos: List<AssetInfo> = emptyList(), val work: WorkData = WorkData(), val profile: LocalProfile = LocalProfile()) : java.io.Serializable
+    val credentials: List<Credential> = emptyList(), val infos: List<AssetInfo> = emptyList(), val work: WorkData = WorkData(), val profile: LocalProfile = LocalProfile(), val contacts: List<Contact> = emptyList(), val tradeNames: List<String> = trades) : java.io.Serializable
 fun number(text: String): Double? = text.trim().replace(',', '.').toDoubleOrNull()?.takeIf { it.isFinite() }
 private fun <T> List<T>.json(map: (T) -> JSONObject) = JSONArray().also { a -> forEach { a.put(map(it)) } }
 private fun obj(vararg pairs: Pair<String, Any>) = JSONObject().also { j -> pairs.forEach { j.put(it.first, it.second) } }
-fun encode(d: Data): ByteArray = obj("schema" to 5,
+fun encode(d: Data): ByteArray = obj("schema" to 6,
+    "contacts" to contactsJson(d.contacts), "tradeNames" to JSONArray(d.tradeNames),
     "profile" to profileJson(d.profile),
-    "assets" to d.assets.json { obj("id" to it.id, "name" to it.name, "trade" to it.trade, "location" to it.location, "note" to it.note, "manufacturer" to it.manufacturer, "model" to it.model, "serial" to it.serial, "contact" to it.contact, "spareParts" to it.spareParts, "nextService" to it.nextService, "tag" to it.tag, "parentId" to it.parentId, "favorite" to it.favorite, "lastOpened" to it.lastOpened) },
-    "entries" to d.entries.json { obj("id" to it.id, "assetId" to it.assetId, "title" to it.title, "note" to it.note, "priority" to it.priority, "status" to it.status, "created" to it.created, "updated" to it.updated, "minutes" to it.minutes) },
+    "assets" to d.assets.json { obj("id" to it.id, "name" to it.name, "trade" to it.trade, "location" to it.location, "note" to it.note, "manufacturer" to it.manufacturer, "model" to it.model, "serial" to it.serial, "contact" to it.contact, "spareParts" to it.spareParts, "nextService" to it.nextService, "tag" to it.tag, "parentId" to it.parentId, "favorite" to it.favorite, "lastOpened" to it.lastOpened, "coverImage" to it.coverImage) },
+    "entries" to d.entries.json { obj("id" to it.id, "assetId" to it.assetId, "title" to it.title, "note" to it.note, "priority" to it.priority, "status" to it.status, "created" to it.created, "updated" to it.updated, "minutes" to it.minutes, "guideIds" to JSONArray(it.guideIds)) },
     "readings" to d.readings.json { obj("id" to it.id, "assetId" to it.assetId, "label" to it.label, "value" to it.value, "unit" to it.unit, "note" to it.note, "created" to it.created, "meterId" to it.meterId, "reset" to it.reset) },
     "rounds" to d.rounds.json { obj("id" to it.id, "title" to it.title, "checks" to JSONArray(it.checks)) },
     "credentials" to d.credentials.json { obj("id" to it.id, "assetId" to it.assetId, "title" to it.title, "username" to it.username, "password" to it.password, "address" to it.address, "note" to it.note, "updated" to it.updated) },
@@ -40,15 +41,15 @@ private fun <T> JSONObject.list(key: String, map: (JSONObject) -> T): List<T> = 
 }
 private fun JSONObject.strings(key: String): List<String> = getJSONArray(key).let { a -> (0 until a.length()).map { a.getString(it) } }
 fun decode(bytes: ByteArray): Data {
-    val j = JSONObject(bytes.toString(Charsets.UTF_8)); val schema = j.getInt("schema"); require(schema in 1..5) { "Unbekannte Datenversion" }
-    val d = Data(j.list("assets") { Asset(it.getString("id"), it.getString("name"), it.getString("trade"), it.getString("location"), it.getString("note"), it.optString("manufacturer"), it.optString("model"), it.optString("serial"), it.optString("contact"), it.optString("spareParts"), it.optString("nextService"), it.optString("tag"), it.optString("parentId"), it.optBoolean("favorite"), it.optLong("lastOpened")) },
-        j.list("entries") { Entry(it.getString("id"), it.getString("assetId"), it.getString("title"), it.getString("note"), it.getString("priority"), it.getString("status"), it.getLong("created"), it.getLong("updated"), it.getInt("minutes")) },
+    val j = JSONObject(bytes.toString(Charsets.UTF_8)); val schema = j.getInt("schema"); require(schema in 1..6) { "Unbekannte Datenversion" }
+    val d = Data(j.list("assets") { Asset(it.getString("id"), it.getString("name"), it.getString("trade"), it.getString("location"), it.getString("note"), it.optString("manufacturer"), it.optString("model"), it.optString("serial"), it.optString("contact"), it.optString("spareParts"), it.optString("nextService"), it.optString("tag"), it.optString("parentId"), it.optBoolean("favorite"), it.optLong("lastOpened"), it.optString("coverImage")) },
+        j.list("entries") { Entry(it.getString("id"), it.getString("assetId"), it.getString("title"), it.getString("note"), it.getString("priority"), it.getString("status"), it.getLong("created"), it.getLong("updated"), it.getInt("minutes"), if (it.has("guideIds")) it.strings("guideIds") else emptyList()) },
         j.list("readings") { Reading(it.getString("id"), it.getString("assetId"), it.getString("label"), it.getDouble("value"), it.getString("unit"), it.getString("note"), it.getLong("created"), it.optString("meterId"), it.optBoolean("reset")) },
         j.list("rounds") { Round(it.getString("id"), it.getString("title"), it.strings("checks")) },
         j.list("runs") { RoundRun(it.getString("id"), it.getString("title"), it.strings("results"), it.getString("note"), it.getLong("created")) },
         if (schema == 1) emptyList() else j.list("credentials") { Credential(it.getString("id"), it.getString("assetId"), it.getString("title"), it.getString("username"), it.getString("password"), it.getString("address"), it.getString("note"), it.getLong("updated")) },
         if (schema == 1) emptyList() else j.list("infos") { AssetInfo(it.getString("id"), it.getString("assetId"), it.getString("title"), it.getString("body"), it.getLong("updated")) },
-        if (schema < 3) WorkData() else readWork(j.getJSONObject("work")), readProfile(j.optJSONObject("profile")))
+        if (schema < 3) WorkData() else readWork(j.getJSONObject("work")), readProfile(j.optJSONObject("profile")), readContacts(j.optJSONArray("contacts")), if (j.has("tradeNames")) j.strings("tradeNames") else trades)
     val ids = d.assets.map { it.id }.toSet()
     require(ids.size == d.assets.size && d.assets.all { it.name.isNotBlank() })
     require(d.entries.all { it.assetId in ids && it.status in statuses && it.priority in priorities && it.minutes >= 0 })
@@ -63,6 +64,8 @@ fun decode(bytes: ByteArray): Data {
         val visited = mutableSetOf(asset.id); var parent = asset.parentId
         while (parent.isNotEmpty()) { require(parent in ids && visited.add(parent)) { "Ungültige Anlagenhierarchie" }; parent = d.assets.single { it.id == parent }.parentId }
     }
+    validateRelations(d)
+    validateImages(d)
     validateProfile(d.profile)
     validateWork(d.work, ids)
     require(d.readings.all { r -> r.meterId.isEmpty() || d.work.meters.any { it.id == r.meterId && it.assetId == r.assetId } })

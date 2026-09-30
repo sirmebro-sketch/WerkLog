@@ -17,7 +17,7 @@ import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.delay
 
 @Composable internal fun AssetDetails(asset: Asset, data: Data, busy: Boolean, back: () -> Unit, edit: () -> Unit,
-    save: (Data) -> Unit, addEntry: () -> Unit, addReading: () -> Unit, editEntry: (Entry) -> Unit, shareFile: (java.io.File) -> Unit) {
+    save: (Data) -> Unit, addEntry: () -> Unit, addReading: () -> Unit, editEntry: (Entry) -> Unit, shareFile: (java.io.File) -> Unit, photo: (PhotoTarget) -> Unit) {
     var section by rememberSaveable(asset.id) { mutableStateOf("Übersicht") }
     var credentialEditor by rememberSaveable { mutableStateOf(false) }
     var selectedCredential by rememberSaveable { mutableStateOf<Credential?>(null) }
@@ -43,6 +43,12 @@ import kotlinx.coroutines.delay
     Spacer(Modifier.height(12.dp))
     when (section) {
         "Übersicht" -> {
+            StoredPhoto(asset.coverImage, true)
+            TextButton(onClick = { photo(PhotoTarget("cover", asset.id)) }, enabled = !busy && (asset.coverImage.isNotBlank() || imageValues(data).count { it.isNotEmpty() } < MAX_IMAGES)) { Text(if (asset.coverImage.isBlank()) "+ Anlagenbild" else "Anlagenbild ersetzen") }
+            if (asset.coverImage.isNotBlank()) TextButton(onClick = { save(data.copy(assets = data.assets.map { if (it.id == asset.id) it.copy(coverImage = "") else it })) }, enabled = !busy) { Text("Anlagenbild entfernen") }
+            ContactLinks(data, "Anlagen", asset.id, busy, save)
+            data.work.guides.filter { it.assetId == asset.id }.forEach { RecordLink("Anleitungen", it.id, "Anleitung: ${it.title}") }
+            data.work.orders.filter { it.assetId == asset.id || it.items.any { x -> x.assetId == asset.id } }.forEach { RecordLink("Bestellungen", it.id, "Bestellung: ${it.title} · ${it.status}") }
             Panel {
                 Section("Stammdaten")
                 Detail("Hersteller", asset.manufacturer); Detail("Typ / Modell", asset.model); Detail("Kennzeichnung / Seriennummer", asset.serial)
@@ -167,17 +173,17 @@ import kotlinx.coroutines.delay
         Field(title, { title = it }, "Überschrift *"); Field(body, { body = it }, "Information / Hinweis *", 6)
     }
 }
-@Composable internal fun AssetEditor(existing: Asset?, assets: List<Asset>, close: () -> Unit, save: (Asset) -> Unit) {
-    var name by rememberSaveable { mutableStateOf(existing?.name ?: "") }; var trade by rememberSaveable { mutableStateOf(existing?.trade ?: trades.first()) }
+@Composable internal fun AssetEditor(existing: Asset?, assets: List<Asset>, tradeOptions: List<String>, close: () -> Unit, save: (Asset) -> Unit) {
+    var name by rememberSaveable { mutableStateOf(existing?.name ?: "") }; var trade by rememberSaveable { mutableStateOf(existing?.trade ?: tradeOptions.firstOrNull().orEmpty()) }
     var location by rememberSaveable { mutableStateOf(existing?.location ?: "") }; var note by rememberSaveable { mutableStateOf(existing?.note ?: "") }
     var manufacturer by rememberSaveable { mutableStateOf(existing?.manufacturer ?: "") }; var model by rememberSaveable { mutableStateOf(existing?.model ?: "") }
     var serial by rememberSaveable { mutableStateOf(existing?.serial ?: "") }; var contact by rememberSaveable { mutableStateOf(existing?.contact ?: "") }
     var parts by rememberSaveable { mutableStateOf(existing?.spareParts ?: "") }; var service by rememberSaveable { mutableStateOf(existing?.nextService ?: "") }
     var tag by rememberSaveable { mutableStateOf(existing?.tag ?: "") }; var parent by rememberSaveable { mutableStateOf(existing?.parentId ?: "") }
     Form("Anlageninformationen", name.isNotBlank() && (service.isBlank() || parseServiceDate(service) != null), close, {
-        save(Asset(existing?.id ?: newId(), name.trim(), trade, location.trim(), note.trim(), manufacturer.trim(), model.trim(), serial.trim(), contact.trim(), parts.trim(), service.trim(), tag.trim(), parent, existing?.favorite ?: false, existing?.lastOpened ?: 0))
+        save(Asset(existing?.id ?: newId(), name.trim(), trade, location.trim(), note.trim(), manufacturer.trim(), model.trim(), serial.trim(), contact.trim(), parts.trim(), service.trim(), tag.trim(), parent, existing?.favorite ?: false, existing?.lastOpened ?: 0, existing?.coverImage ?: ""))
     }) {
-        Field(name, { name = it }, "Anlagenname *"); Picker("Gewerk", trades.map { it to it }, trade) { trade = it }
+        Field(name, { name = it }, "Anlagenname *"); Picker("Gewerk", tradeOptions.map { it to it }, trade) { trade = it }
         Field(tag, { tag = it }, "Anlagenkennzeichen / KKS"); Picker("Übergeordnete Anlage", listOf("" to "Keine") + assets.filter { it.id != existing?.id }.map { it.id to it.name }, parent) { parent = it }
         Field(location, { location = it }, "Gebäude / Standort / Raum"); Field(manufacturer, { manufacturer = it }, "Hersteller")
         Field(model, { model = it }, "Typ / Modell"); Field(serial, { serial = it }, "Kennzeichnung / Seriennummer")

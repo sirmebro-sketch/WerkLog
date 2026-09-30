@@ -321,6 +321,7 @@ private fun java.io.InputStream.readBytesLimited(): ByteArray {
     var removal by rememberSaveable { mutableStateOf<Pair<String, String>?>(null) }
     var run by rememberSaveable { mutableStateOf<Round?>(null) }
     var mail by rememberSaveable { mutableStateOf<Pair<String, String>?>(null) }
+    var linkedRecord by rememberSaveable { mutableStateOf<String?>(null) }
     var nextGuideStep by remember { mutableStateOf<(() -> Unit)?>(null) }
     BackHandler(enabled = page == 4 && tool != null) { tool = null }
     BackHandler(enabled = page == 1 && selectedAssetId != null && dialog == null) { selectedAssetId = null }
@@ -341,6 +342,14 @@ private fun java.io.InputStream.readBytesLimited(): ByteArray {
     fun finishTour() { tour = -1; page = 0; tourPrefs.edit().putBoolean("done-v1", true).apply() }
     LaunchedEffect(tour, tourVisible) { if (tourVisible) { page = tourSteps[tour].first; tool = null; selectedAssetId = null } }
     BackHandler(enabled = tourVisible) { finishTour() }
+    CompositionLocalProvider(LocalRecordLink provides { kind, id ->
+        dialog = null
+        when (kind) {
+            "Anlagen" -> { selectedAssetId = id; page = 1; tool = null }
+            "Vorgang" -> { editEntry = d.entries.find { it.id == id }; dialog = "entry" }
+            else -> { linkedRecord = id; tool = kind; page = 4 }
+        }
+    }) {
     Scaffold(containerColor = WerkColors.background, topBar = {
         Column {
             Row(Modifier.fillMaxWidth().statusBarsPadding().padding(horizontal = 20.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -423,21 +432,33 @@ private fun java.io.InputStream.readBytesLimited(): ByteArray {
                             { next -> model.update(next) },
                             { editEntry = null; preselectedAssetId = selected.id; dialog = "entry" },
                             { editReading = null; preselectedAssetId = selected.id; dialog = "reading" },
-                            { e -> editEntry = e; dialog = "entry" }, onShareFile)
+                            { e -> editEntry = e; dialog = "entry" }, onShareFile, onPhoto)
                     } else {
                         var query by rememberSaveable { mutableStateOf("") }
                         Field(query, { query = it }, "Anlagen, Kennzeichen, Wissen und Anleitungen suchen")
                         OutlinedButton(onClick = { onPhoto(PhotoTarget("asset", "")) }, enabled = !model.busy) { Text("Anlagen-Code fotografieren") }
                         Button(onClick = { editAsset = null; dialog = "asset" }, enabled = !model.busy) { Text("+ Anlage anlegen") }
-                        val filtered = searchAssets(d, query)
+                        var tradeFilter by rememberSaveable { mutableStateOf("") }
+                        var favorites by rememberSaveable { mutableStateOf(false) }
+                        Picker("Gewerk filtern", listOf("" to "Alle Gewerke") + availableTrades(d).map { it to it }, tradeFilter) { tradeFilter = it }
+                        Row { Checkbox(favorites, { favorites = it }); Text("Nur Favoriten", Modifier.padding(top = 12.dp)) }
+                        val filtered = searchAssets(d, query).filter { (tradeFilter.isBlank() || it.trade == tradeFilter) && (!favorites || it.favorite) }
+                        Text("${filtered.size} von ${d.assets.size} Anlagen", color = Muted)
                         if (filtered.isEmpty()) Hint("Keine Anlagen gefunden. Lege deine erste Anlage an oder ändere die Suche.")
-                        filtered.forEach { a -> Panel {
-                            Text("${if (a.favorite) "★ " else ""}${a.tag} · ${a.trade.uppercase()}", color = Mint, fontSize = 11.sp); Text(a.name, fontSize = 21.sp, fontWeight = FontWeight.Bold)
-                            Text(a.location.ifBlank { "Kein Standort hinterlegt" }, color = Muted)
-                            Text("${d.entries.count { it.assetId == a.id && it.status != "Erledigt" }} offen · ${d.credentials.count { it.assetId == a.id }} Zugänge", color = Mint, modifier = Modifier.padding(top = 8.dp))
-                            if (a.nextService.isNotBlank()) Text("${serviceState(a.nextService)} · ${a.nextService}", color = Amber)
-                            Button(onClick = { selectedAssetId = a.id; model.update(d.copy(assets = d.assets.map { if (it.id == a.id) it.copy(lastOpened = System.currentTimeMillis()) else it })) }) { Text("Anlagenakte öffnen") }
-                        } }
+                        filtered.forEach { a ->
+                            OutlinedButton(onClick = { selectedAssetId = a.id; model.update(d.copy(assets = d.assets.map { if (it.id == a.id) it.copy(lastOpened = System.currentTimeMillis()) else it })) }, modifier = Modifier.fillMaxWidth(), contentPadding = PaddingValues(12.dp)) {
+                                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
+                                    AssetThumbnail(a.coverImage)
+                                    Column(Modifier.weight(1f)) {
+                                        Text("${if (a.favorite) "★ " else ""}${a.name}", fontWeight = FontWeight.Bold, maxLines = 2)
+                                        Text(listOf(a.tag, a.trade, a.location).filter { it.isNotBlank() }.joinToString(" · "), color = Muted, fontSize = 12.sp, maxLines = 2)
+                                        val count = d.entries.count { it.assetId == a.id && it.status != "Erledigt" }
+                                        if (count > 0 || a.nextService.isNotBlank()) Text("$count offen" + if (a.nextService.isNotBlank()) " · Wartung ${a.nextService}" else "", color = if (serviceState(a.nextService) == "Überfällig") Amber else Mint, fontSize = 12.sp)
+                                    }
+                                    Icon(Icons.Outlined.ChevronRight, "Anlagenakte öffnen")
+                                }
+                            }
+                        }
                     }
                 }
                 2 -> {
@@ -478,21 +499,22 @@ private fun java.io.InputStream.readBytesLimited(): ByteArray {
                     } }
                 }
                 4 -> {
-                    if (tool != null) CompositionLocalProvider(LocalGuideStepAction provides { nextGuideStep = it }) { WorkTools(tool!!, d, model.busy, { tool = null }, { model.update(it) }, onPhoto, onOrder) }
+                    if (tool != null) CompositionLocalProvider(LocalGuideStepAction provides { nextGuideStep = it }) { WorkTools(tool!!, d, model.busy, { tool = null }, { model.update(it) }, onPhoto, onOrder, linkedRecord) { linkedRecord = null } }
                     else OperationTiles { label -> when (label) {
                         "Anlagen" -> { page = 1; selectedAssetId = null }
                         "Arbeitsprotokoll" -> page = 2
                         "Rundgang" -> page = 3
-                        else -> tool = label
+                        else -> { linkedRecord = null; tool = label }
                     } }
                 }
                 5 -> {
                     val lastBackup = context.getSharedPreferences("backup", 0).getLong("lastBackup", 0)
                     if (System.currentTimeMillis() - lastBackup > 7L * 86400000) Hint("Sicherung fällig: Seit mindestens sieben Tagen keine vollständige Sicherung exportiert.")
                     ProfilePanel(d, model.busy, { model.update(it) }, onPhoto)
+                    TradeSettings(d, model.busy) { model.update(it) }
                     Panel { Text("Dein Datentresor", fontSize = 23.sp, fontWeight = FontWeight.Bold)
                         Text("Lokal verschlüsselt · Ohne Internetberechtigung", color = Mint)
-                        Text("${imageCount(d.work)} / $MAX_IMAGES Bilder · ${model.storageBytes() / (1024 * 1024)} MiB belegt")
+                        Text("${imageValues(d).count { it.isNotEmpty() }} / $MAX_IMAGES Bilder · ${model.storageBytes() / (1024 * 1024)} MiB belegt")
                         Hint("Bilder separat verschlüsselt, bis 512 KiB pro Bild. Textdaten bis 32 MiB. Sicherungen enthalten alle Bilder.")
                         Text("Beim normalen Verlassen wird die App gesperrt. Bei Dateiauswahl und Kollegenaustausch sind App-Wechsel bis zu 2 Minuten möglich. Bildschirm aus oder manuelles Sperren sperrt sofort. Screenshots sind blockiert. Ein verlorenes Passwort lässt sich nicht zurücksetzen.", modifier = Modifier.padding(top = 12.dp)) }
                     val activity = androidx.compose.ui.platform.LocalContext.current as MainActivity
@@ -506,7 +528,7 @@ private fun java.io.InputStream.readBytesLimited(): ByteArray {
                     Hint("WerkLog dokumentiert Beobachtungen und Tätigkeiten. Freigaben, Betriebsanweisungen und eure offiziellen Meldewege bleiben maßgeblich. Keine Anlagensteuerung oder Verbindung zur GLT.")
                     OutlinedButton(onClick = { dialog = "password" }, enabled = !model.busy, modifier = Modifier.fillMaxWidth()) { Text("App-Passwort ändern") }
                     OutlinedButton(onClick = { tour = 0; page = 0 }, modifier = Modifier.fillMaxWidth()) { Text("Kurze App-Führung starten") }
-                    Text("WERKLOG 0.4.3 · KOTLIN / ANDROID", color = Muted, fontSize = 11.sp)
+                    Text("WERKLOG 0.5.0 · KOTLIN / ANDROID", color = Muted, fontSize = 11.sp)
                 }
             }
             Spacer(Modifier.height(24.dp))
@@ -521,17 +543,18 @@ private fun java.io.InputStream.readBytesLimited(): ByteArray {
         }, enabled = !model.busy) { Text("Jetzt aktivieren") } },
         dismissButton = { TextButton(onClick = model::dismissBiometricOffer) { Text("Später") } })
     if (dialog == "password") PasswordChangeDialog(model.busy, { dialog = null }) { old, next -> model.changePassword(old, next); dialog = null }
-    if (dialog == "asset") AssetEditor(editAsset, d.assets, { dialog = null }) { a -> model.update(d.copy(assets = d.assets.filterNot { it.id == a.id } + a)); dialog = null }
-    if (dialog == "entry") EntryEditor(editEntry, d.assets, d.work.templates, preselectedAssetId, { dialog = null }, { editEntry?.let { removal = "entry" to it.id }; dialog = null }, { e ->
-        model.update(d.copy(work = d.work.copy(orders = d.work.orders + PartsOrder(title = e.title, entryId = e.id, items = listOf(OrderItem(name = e.title, quantity = "1", assetId = e.assetId)))))); dialog = null; page = 4; tool = "Bestellungen"
+    if (dialog == "asset") AssetEditor(editAsset, d.assets, availableTrades(d), { dialog = null }) { a -> model.update(d.copy(assets = d.assets.filterNot { it.id == a.id } + a)); dialog = null }
+    if (dialog == "entry") EntryEditor(editEntry, d, { model.update(it) }, d.assets, d.work.templates, preselectedAssetId, { dialog = null }, { editEntry?.let { removal = "entry" to it.id }; dialog = null }, { e ->
+        val order = orderFromEntry(e)
+        model.update(d.copy(entries = d.entries.filterNot { it.id == e.id } + e, work = d.work.copy(orders = d.work.orders + order))); linkedRecord = order.id; dialog = null; page = 4; tool = "Bestellungen"
     }, { e ->
-        model.update(d.copy(work = d.work.copy(appointments = d.work.appointments + Appointment(title = e.title, start = formatAppointment(java.time.LocalDate.now().plusDays(1).atTime(8, 0)), assetId = e.assetId, note = e.note)))); dialog = null; page = 4; tool = "Kalender"
+        model.update(d.copy(entries = d.entries.filterNot { it.id == e.id } + e, work = d.work.copy(appointments = d.work.appointments + Appointment(title = e.title, start = formatAppointment(java.time.LocalDate.now().plusDays(1).atTime(8, 0)), assetId = e.assetId, note = e.note)))); dialog = null; page = 4; tool = "Kalender"
     }) { e -> model.update(d.copy(entries = d.entries.filterNot { it.id == e.id } + e)); dialog = null }
     if (dialog == "reading") ReadingEditor(editReading, d.assets, preselectedAssetId, { dialog = null }) { r -> model.update(d.copy(readings = d.readings.filterNot { it.id == r.id } + r)); dialog = null }
     if (dialog == "round") RoundEditor(editRound, { dialog = null }) { r -> model.update(d.copy(rounds = d.rounds.filterNot { it.id == r.id } + r)); dialog = null }
     removal?.let { (kind, id) -> ConfirmRemoval("Eintrag löschen?", "Dieser lokale Eintrag wird entfernt. Bereits erstellte Sicherungen und abgeschlossene Rundgänge bleiben unverändert.", model.busy, { removal = null }) {
         model.update(when (kind) {
-            "entry" -> d.copy(entries = d.entries.filterNot { it.id == id })
+            "entry" -> removeEntry(d, id)
             "reading" -> d.copy(readings = d.readings.filterNot { it.id == id })
             "round" -> d.copy(rounds = d.rounds.filterNot { it.id == id })
             else -> d.copy(runs = d.runs.filterNot { it.id == id })
@@ -544,6 +567,7 @@ private fun java.io.InputStream.readBytesLimited(): ByteArray {
             Text(m.second, modifier = Modifier.padding(top = 16.dp))
         }
     }, confirmButton = { TextButton(onClick = { mail = null; onShare(m.first, m.second) }) { Text("E-Mail-App öffnen") } }, dismissButton = { TextButton(onClick = { mail = null }) { Text("Abbrechen") } }) }
+    }
 }
 
 @Composable private fun Metric(value: String, label: String, color: Color = Mint) { Column { Text(value, fontSize = 36.sp, color = color, fontWeight = FontWeight.Bold); Text(label, color = Muted, fontSize = 13.sp) } }
@@ -575,21 +599,30 @@ private fun java.io.InputStream.readBytesLimited(): ByteArray {
     AlertDialog(onDismissRequest = close, title = { Text(title) }, text = { Column(Modifier.heightIn(max = 520.dp).verticalScroll(rememberScrollState()), content = content) },
         confirmButton = { TextButton(onClick = save, enabled = valid) { Text(confirmLabel) } }, dismissButton = { TextButton(onClick = close) { Text("Abbrechen") } })
 }
-@Composable private fun EntryEditor(existing: Entry?, assets: List<Asset>, templates: List<EntryTemplate>, initialAssetId: String?, close: () -> Unit, delete: () -> Unit, order: (Entry) -> Unit, appointment: (Entry) -> Unit, save: (Entry) -> Unit) {
+@Composable private fun EntryEditor(existing: Entry?, data: Data, saveData: (Data) -> Unit, assets: List<Asset>, templates: List<EntryTemplate>, initialAssetId: String?, close: () -> Unit, delete: () -> Unit, order: (Entry) -> Unit, appointment: (Entry) -> Unit, save: (Entry) -> Unit) {
     var asset by rememberSaveable { mutableStateOf(existing?.assetId ?: initialAssetId ?: assets.firstOrNull()?.id.orEmpty()) }
     var title by rememberSaveable { mutableStateOf(existing?.title ?: "") }; var note by rememberSaveable { mutableStateOf(existing?.note ?: "") }
     var priority by rememberSaveable { mutableStateOf(existing?.priority ?: "Normal") }; var status by rememberSaveable { mutableStateOf(existing?.status ?: "Offen") }
     var minutes by rememberSaveable { mutableStateOf((existing?.minutes ?: 0).toString()) }
+    var guideIds by rememberSaveable { mutableStateOf(existing?.guideIds ?: emptyList<String>()) }
+    fun current() = Entry(existing?.id ?: newId(), asset, title.trim(), note.trim(), priority, status, existing?.created ?: System.currentTimeMillis(), System.currentTimeMillis(), minutes.toIntOrNull() ?: 0, guideIds)
     Form("Störung / Tätigkeit", title.isNotBlank() && asset.isNotEmpty() && (minutes.toIntOrNull()?.let { it >= 0 } == true), close, {
-        save(Entry(existing?.id ?: newId(), asset, title.trim(), note.trim(), priority, status, existing?.created ?: System.currentTimeMillis(), System.currentTimeMillis(), minutes.toInt()))
+        save(current())
     }) {
         if (existing == null) Picker("Vorlage", (starterTemplates + templates).map { it.id to it.name }, "") { id -> (starterTemplates + templates).find { it.id == id }?.let { title = it.title; note = it.body } }
         Picker("Anlage", assets.map { it.id to it.name }, asset) { asset = it }; Field(title, { title = it }, "Kurzbeschreibung *")
         Field(note, { note = it }, "Beobachtung, Maßnahmen, nächste Schritte", 4); Text("Priorität"); Choices(priorities, priority) { priority = it }
         Text("Status"); Choices(statuses, status) { status = it }; Field(minutes, { minutes = it }, "Zeitaufwand in Minuten", numeric = true)
+        LinkChoices("Passende Anleitungen", data.work.guides.map { it.id to it.title }, guideIds) { guideIds = it }
+        data.work.guides.filter { it.id in guideIds || (it.assetId == asset && asset.isNotBlank()) }.forEach { g ->
+            val open = LocalRecordLink.current
+            TextButton(onClick = { save(current()); open("Anleitungen", g.id) }) { Text("Anleitung: ${g.title}") }
+        }
         if (existing != null) {
-            TextButton(onClick = { order(existing) }) { Text("Teileanforderung aus diesem Vorgang") }
-            TextButton(onClick = { appointment(existing) }) { Text("Folgetermin anlegen (morgen 08:00, danach bearbeiten)") }
+            ContactLinks(data, "Vorgang", existing.id, false, saveData)
+            data.work.orders.filter { it.entryId == existing.id }.forEach { o -> RecordLink("Bestellungen", o.id, "Bestellung: ${o.title}") }
+            TextButton(onClick = { order(current()) }) { Text("Teileanforderung aus diesem Vorgang") }
+            TextButton(onClick = { appointment(current()) }) { Text("Folgetermin anlegen (morgen 08:00, danach bearbeiten)") }
             TextButton(onClick = delete) { Text("Vorgang löschen", color = MaterialTheme.colorScheme.error) }
         }
         if (existing != null) TextButton(onClick = { save(existing.copy(id = newId(), title = "$title (Kopie)", note = note, status = "Offen", created = System.currentTimeMillis(), updated = System.currentTimeMillis(), minutes = 0)) }) { Text("Als neue Tätigkeit duplizieren") }

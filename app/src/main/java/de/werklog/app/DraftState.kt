@@ -18,6 +18,10 @@ internal object DraftState {
     }
     private fun pack(value: Any?): Bundle = Bundle().apply {
         when (value) {
+            is MutableIntState -> { putInt("primitive", 1); putInt("value", value.intValue) }
+            is MutableLongState -> { putInt("primitive", 2); putLong("value", value.longValue) }
+            is MutableFloatState -> { putInt("primitive", 3); putFloat("value", value.floatValue) }
+            is MutableDoubleState -> { putInt("primitive", 4); putDouble("value", value.doubleValue) }
             is androidx.compose.runtime.snapshots.SnapshotMutableState<*> -> {
                 putInt("state", when (value.policy) { referentialEqualityPolicy<Any?>() -> 2; neverEqualPolicy<Any?>() -> 3; else -> 1 })
                 putBundle("nested", pack(value.value))
@@ -32,6 +36,12 @@ internal object DraftState {
     @Suppress("DEPRECATION")
     private fun unpack(bundle: Bundle): Any? {
         bundle.classLoader = DraftState::class.java.classLoader
+        when (bundle.getInt("primitive")) {
+            1 -> return mutableIntStateOf(bundle.getInt("value"))
+            2 -> return mutableLongStateOf(bundle.getLong("value"))
+            3 -> return mutableFloatStateOf(bundle.getFloat("value"))
+            4 -> return mutableDoubleStateOf(bundle.getDouble("value"))
+        }
         val state = bundle.getInt("state")
         return if (state == 0) bundle.get("value") else mutableStateOf(unpack(requireNotNull(bundle.getBundle("nested"))),
             when (state) { 2 -> referentialEqualityPolicy(); 3 -> neverEqualPolicy(); else -> structuralEqualityPolicy() })

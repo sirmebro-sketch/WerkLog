@@ -53,7 +53,8 @@ import androidx.compose.ui.unit.dp
         "Kalender" to androidx.compose.material.icons.Icons.Outlined.CalendarMonth,
         "Anleitungen" to androidx.compose.material.icons.Icons.Outlined.MenuBook,
         "Bestellungen" to androidx.compose.material.icons.Icons.Outlined.ShoppingCart,
-        "Textvorlagen" to androidx.compose.material.icons.Icons.Outlined.ContentCopy)
+        "Textvorlagen" to androidx.compose.material.icons.Icons.Outlined.ContentCopy,
+        "Adressbuch" to androidx.compose.material.icons.Icons.Outlined.Contacts)
     tiles.chunked(2).forEach { row -> Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
         row.forEach { (name, icon) -> Card(onClick = { open(name) }, modifier = Modifier.weight(1f).padding(bottom = 12.dp).heightIn(min = 115.dp)) {
             Column(Modifier.fillMaxWidth().padding(18.dp), horizontalAlignment = androidx.compose.ui.Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(12.dp)) {
