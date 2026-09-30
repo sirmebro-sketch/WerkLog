@@ -161,9 +161,9 @@ class NavigationTest {
             ui.onNodeWithText("+ Kontakt").performClick()
             ui.onNodeWithText("Name *").performTextInput("Service Testperson")
             ui.onNodeWithText("Anlagen · 0 zugeordnet ▾").performScrollTo().performClick()
-            ui.onAllNodes(isToggleable()).onFirst().performClick()
+            ui.onNodeWithContentDescription("Anlagen: Prüfanlage geändert").performScrollTo().assertIsOff().performClick().assertIsOn()
             ui.onNodeWithText("Störungen / Arbeiten · 0 zugeordnet ▾").performScrollTo().performClick()
-            ui.onAllNodes(isToggleable()).onLast().performScrollTo().performClick()
+            ui.onNodeWithContentDescription("Störungen / Arbeiten: Prüfstörung · Prüfanlage geändert").performScrollTo().assertIsOff().performClick().assertIsOn()
             ui.onNodeWithText("Speichern").performClick()
             ui.waitUntil(15000) { !scenarioModel.busy && scenarioModel.data!!.contacts.size == 1 }
             org.junit.Assert.assertEquals(1, scenarioModel.data!!.contacts.single().assetIds.size)

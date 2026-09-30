@@ -5,6 +5,8 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -21,7 +23,7 @@ val LocalRecordLink = staticCompositionLocalOf<(String, String) -> Unit> { { _, 
     if (expanded) {
         if (options.size > 8) Field(query, { query = it }, "$label suchen")
         options.filter { it.second.contains(query, true) }.forEach { (id, name) ->
-            Row { Checkbox(id in chosen, { change(if (it) (chosen + id).distinct() else chosen - id) }); Text(name, Modifier.padding(top = 12.dp)) }
+            Row { Checkbox(id in chosen, { change(if (it) (chosen + id).distinct() else chosen - id) }, modifier = Modifier.semantics { contentDescription = "$label: $name" }); Text(name, Modifier.padding(top = 12.dp)) }
         }
         if (options.isEmpty()) Hint("Noch keine Einträge vorhanden.")
     }
