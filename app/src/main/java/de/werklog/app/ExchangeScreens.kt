@@ -62,7 +62,7 @@ val LocalTransferScope = staticCompositionLocalOf<(Boolean) -> Unit> { {} }
         }, dismissButton = { TextButton(onClick = close, enabled = !working) { Text("Abbrechen") } })
 }
 
-@Composable internal fun ImportAssetDialog(file: java.io.File, current: Data, busy: Boolean, close: () -> Unit, save: (OpenShare, String?, Boolean) -> Unit) {
+@Composable internal fun ImportAssetDialog(file: java.io.File, current: Data, busy: Boolean, close: () -> Unit, save: (OpenShare, String?, Boolean, (Boolean) -> Unit) -> Unit) {
     val transferScope = LocalTransferScope.current
     DisposableEffect(Unit) { transferScope(true); onDispose { transferScope(false) } }
     var code by rememberSaveable { mutableStateOf("") }; var opened by remember { mutableStateOf<OpenShare?>(null) }
@@ -100,7 +100,7 @@ val LocalTransferScope = staticCompositionLocalOf<(Boolean) -> Unit> { {} }
             finally { comparing = false }
         }
     }
-    AlertDialog(onDismissRequest = { if (!working) close() }, title = { Text("Anlagenfreigabe importieren") },
+    AlertDialog(onDismissRequest = { if (!working && !busy && !comparing) close() }, title = { Text("Anlagenfreigabe importieren") },
         text = { Column(Modifier.heightIn(max = 480.dp).verticalScroll(rememberScrollState())) {
             val preview = incoming
             if (preview == null) {
@@ -134,12 +134,14 @@ val LocalTransferScope = staticCompositionLocalOf<(Boolean) -> Unit> { {} }
         } },
         confirmButton = { TextButton(enabled = !busy && !working && !comparing && (target.isEmpty() || comparison != null) && (incoming != null || code.isNotBlank()), onClick = {
             val ready = incoming
-            if (ready != null) { handedOff = true; save(opened!!, target.takeIf { it.isNotEmpty() }, replace); close() }
+            if (ready != null) { handedOff = true; save(opened!!, target.takeIf { it.isNotEmpty() }, replace) { success ->
+                if (success) close() else { opened = null; handedOff = false; resumePreview = false; error = "Import wurde nicht gespeichert. Bitte erneut entschlüsseln und versuchen." }
+            } }
             else { working = true; error = null; val submittedCode = code
                 scope.launch { try { opened = withContext(Dispatchers.IO) { ShareArchive.open(file, submittedCode, context.cacheDir) }; resumePreview = true }
                     catch (_: Exception) { error = "Code falsch, Datei beschädigt oder Format nicht unterstützt. Es wurde nichts importiert." }
                     finally { working = false } }
             }
         }) { Text(if (incoming == null) "Entschlüsseln & prüfen" else if (target.isEmpty()) "Als neue Anlage importieren" else "In Anlage übernehmen") } },
-        dismissButton = { TextButton(onClick = close, enabled = !working) { Text("Abbrechen") } })
+        dismissButton = { TextButton(onClick = close, enabled = !working && !busy && !comparing) { Text("Abbrechen") } })
 }

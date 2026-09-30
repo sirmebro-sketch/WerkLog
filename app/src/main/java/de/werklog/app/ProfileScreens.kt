@@ -78,7 +78,7 @@ val PowerPlantIcon: ImageVector by lazy {
     else Icon(Icons.Outlined.Person, "Lokales Profil", tint = Mint, modifier = Modifier.size(64.dp))
 }
 
-@Composable internal fun ProfilePanel(d: Data, busy: Boolean, save: (Data) -> Unit, photo: (PhotoTarget) -> Unit) {
+@Composable internal fun ProfilePanel(d: Data, busy: Boolean, save: DataSaver, photo: (PhotoTarget) -> Unit) {
     val p = d.profile
     var editing by rememberSaveable { mutableStateOf(false) }
     var deleting by rememberSaveable { mutableStateOf(false) }
@@ -101,7 +101,7 @@ val PowerPlantIcon: ImageVector by lazy {
         var team by rememberSaveable { mutableStateOf(p.team) }; var company by rememberSaveable { mutableStateOf(p.company) }
         var phone by rememberSaveable { mutableStateOf(p.phone) }; var email by rememberSaveable { mutableStateOf(p.email) }
         Form("Lokales Profil", name.isNotBlank() && !busy, { editing = false }, {
-            save(d.copy(profile = p.copy(name = name.trim(), role = role.trim(), team = team.trim(), company = company.trim(), phone = phone.trim(), email = email.trim()))); editing = false
+            save(d.copy(profile = p.copy(name = name.trim(), role = role.trim(), team = team.trim(), company = company.trim(), phone = phone.trim(), email = email.trim()))) { editing = false }
         }) {
             Field(name, { name = it.take(200) }, "Name *")
             Field(role, { role = it.take(200) }, "Funktion / Beruf")
@@ -114,6 +114,6 @@ val PowerPlantIcon: ImageVector by lazy {
     }
     if (deleting) AlertDialog(onDismissRequest = { deleting = false }, title = { Text("Profil löschen?") },
         text = { Text("Name, Profilbild und Kontaktdaten entfernen? Deine Anlagen und Arbeitsdaten bleiben erhalten.") },
-        confirmButton = { TextButton(onClick = { save(d.copy(profile = LocalProfile())); deleting = false }, enabled = !busy) { Text("Löschen") } },
+        confirmButton = { TextButton(onClick = { save(d.copy(profile = LocalProfile())) { deleting = false } }, enabled = !busy) { Text("Löschen") } },
         dismissButton = { TextButton(onClick = { deleting = false }) { Text("Abbrechen") } })
 }

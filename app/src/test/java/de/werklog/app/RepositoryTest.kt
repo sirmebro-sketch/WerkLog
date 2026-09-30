@@ -38,6 +38,19 @@ class RepositoryTest {
             assertArrayEquals(jpeg, restoredRepo.image(restored.third.assets.single().coverImage, restored.second))
         } finally { root.deleteRecursively(); other.deleteRecursively() }
     }
+    @Test fun failedImageSaveRollsBackNewFilesAndLeavesExistingVaultReadable() {
+        val root = Files.createTempDirectory("failed-save").toFile()
+        try {
+            val repo = LocalRepository(root); val salt = Vault.salt(); val key = Vault.key(password, salt)
+            val a = Asset(name = "Test", trade = "Wasser", location = "", note = "")
+            val before = repo.save(Data(assets = listOf(a)), key, salt)
+            val active = File(root, File(root, "active").readText())
+            File(active, "data.vault.tmp").mkdir()
+            assertThrows(Exception::class.java) { repo.save(before.copy(assets = listOf(a.copy(coverImage = Base64.getEncoder().encodeToString(jpeg)))), key, salt) }
+            assertEquals(0, active.listFiles()!!.count { it.extension == "image" })
+            assertEquals(before, decode(Vault.decrypt(repo.envelope(), key)))
+        } finally { root.deleteRecursively() }
+    }
     @Test fun wrongPasswordOrMissingImageCannotReplaceExistingData() {
         val root = Files.createTempDirectory("werklog").toFile()
         try {

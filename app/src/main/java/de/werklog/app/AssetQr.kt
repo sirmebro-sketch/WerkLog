@@ -17,7 +17,7 @@ import com.google.zxing.common.HybridBinarizer
 import java.io.File
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-fun assetCode(a: Asset) = if (a.tag.isNotBlank()) "werklog:tag:${a.tag}" else "werklog:asset:${a.id}"
+fun assetCode(a: Asset) = if (a.tag.isNotBlank() && a.tag.toByteArray(Charsets.UTF_8).size <= 512) "werklog:tag:${a.tag}" else "werklog:asset:${a.id}"
 fun matchAssetCode(d: Data, code: String): Asset? {
     val matches = when {
         code.startsWith("werklog:asset:") -> d.assets.filter { it.id == code.removePrefix("werklog:asset:") }
@@ -27,7 +27,7 @@ fun matchAssetCode(d: Data, code: String): Asset? {
     return matches.singleOrNull()
 }
 suspend fun readAssetCode(file: File): String = withContext(Dispatchers.IO) {
-    val bitmap = try { decodeCamera(file, 1920) } finally { file.delete() }
+    val bitmap = decodeCamera(file, 1920)
     try {
         val pixels = IntArray(bitmap.width * bitmap.height); bitmap.getPixels(pixels, 0, bitmap.width, 0, 0, bitmap.width, bitmap.height)
         MultiFormatReader().decode(BinaryBitmap(HybridBinarizer(RGBLuminanceSource(bitmap.width, bitmap.height, pixels)))).text

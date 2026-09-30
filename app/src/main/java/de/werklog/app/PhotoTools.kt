@@ -86,8 +86,8 @@ suspend fun recognizeMeter(file: File): String {
 val LocalImageLoader = staticCompositionLocalOf<suspend (String) -> ByteArray> { { java.util.Base64.getDecoder().decode(it) } }
 @Composable internal fun StoredPhoto(encoded: String, initiallyOpen: Boolean = false) {
     if (encoded.isEmpty()) return
-    var fullScreen by remember(encoded) { mutableStateOf(false) }
-    var expanded by remember(encoded) { mutableStateOf(initiallyOpen) }
+    var fullScreen by rememberSaveable(encoded) { mutableStateOf(false) }
+    var expanded by rememberSaveable(encoded) { mutableStateOf(initiallyOpen) }
     TextButton(onClick = { expanded = !expanded }) { Text(if (expanded) "Bild verbergen" else "Bild anzeigen") }
     if (!expanded) return
     val loader = LocalImageLoader.current
@@ -134,7 +134,8 @@ val LocalImageLoader = staticCompositionLocalOf<suspend (String) -> ByteArray> {
         }
     }
 }
-@Composable internal fun PhotoReview(file: File, target: PhotoTarget, data: Data, busy: Boolean, close: () -> Unit, openAsset: (String) -> Unit, save: (Data) -> Unit) {
+@Composable internal fun PhotoReview(file: File, target: PhotoTarget, data: Data, busy: Boolean, close: () -> Unit, openAsset: (String) -> Unit, save: DataSaver) {
+    val recordId = rememberSaveable(file.name) { newId() }
     var result by remember { mutableStateOf<String?>(null) }; var error by remember { mutableStateOf<String?>(null) }
     var value by rememberSaveable { mutableStateOf("") }; var confirmed by rememberSaveable { mutableStateOf(false) }
     val meters = data.work.meters
@@ -158,9 +159,8 @@ val LocalImageLoader = staticCompositionLocalOf<suspend (String) -> ByteArray> {
     val valid = if (target.kind == "meter") meter != null && number(value)?.let { it >= 0 } == true && confirmed else result != null
     Form(if (target.kind == "meter") "Zählerstand prüfen" else "Verkleinertes Bild", valid && !busy, close, {
         try {
-        if (target.kind == "meter" && meter != null) save(data.copy(readings = data.readings + Reading(assetId = meter.assetId, label = meter.name, value = number(value)!!, unit = meter.unit, note = "Fotoerkennung / manuell bestätigt" + (warning?.let { " · Auffälligkeit bestätigt: $it" } ?: ""), meterId = meter.id), work = data.work.copy(lastMeter = meter.id)))
-        else result?.let { save(attachImage(data, target, it)) }
-        close()
+        if (target.kind == "meter" && meter != null) save(data.copy(readings = data.readings.filterNot { it.id == recordId } + Reading(id = recordId, assetId = meter.assetId, label = meter.name, value = number(value)!!, unit = meter.unit, note = "Fotoerkennung / manuell bestätigt" + (warning?.let { " · Auffälligkeit bestätigt: $it" } ?: ""), meterId = meter.id), work = data.work.copy(lastMeter = meter.id)), close)
+        else result?.let { save(attachImage(data, target, it), close) }
         } catch (_: Exception) { error = "Bildlimit erreicht oder Ziel nicht mehr vorhanden. Bitte ein altes Bild entfernen und erneut versuchen." }
     }) {
         error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
@@ -174,7 +174,7 @@ val LocalImageLoader = staticCompositionLocalOf<suspend (String) -> ByteArray> {
             }
             previous?.let { Text("Vorher: ${it.value} ${it.unit}") }; warning?.let { Text(it, color = Amber) }
             Field(value, { value = it; confirmed = false }, "Bestätigter Zählerstand (${meter?.unit ?: "Einheit"})", numeric = true)
-            Row { Checkbox(confirmed, { confirmed = it }); Text("Zähler, Einheit und Nachkommastellen am Original geprüft", modifier = Modifier.weight(1f).padding(top = 12.dp)) }
+            Row { Checkbox(confirmed, { confirmed = it }, enabled = !busy); Text("Zähler, Einheit und Nachkommastellen am Original geprüft", modifier = Modifier.weight(1f).padding(top = 12.dp)) }
             Hint("Das Zählerfoto wird nicht gespeichert. Nur der bestätigte Zahlenwert kommt ins Protokoll.")
         } else {
             result?.let { StoredPhoto(it, true); Hint("JPEG · höchstens 512 KiB · wird nur verschlüsselt gespeichert.") }

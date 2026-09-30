@@ -25,7 +25,7 @@ import androidx.compose.ui.unit.dp
     }
     Text("${points.minOf { it.value }} – ${points.maxOf { it.value }} ${points.last().unit} · Orange = Zählerwechsel", color = Muted)
 }
-@Composable fun TemplateScreen(d: Data, busy: Boolean, save: (Data) -> Unit) {
+@Composable fun TemplateScreen(d: Data, busy: Boolean, save: DataSaver) {
     var editing by rememberSaveable { mutableStateOf(false) }; var selected by rememberSaveable { mutableStateOf<EntryTemplate?>(null) }
     Section("Textvorlagen für Arbeiten")
     Hint("Wiederverwendbare Texte für ähnliche Arbeiten – zum Beispiel eine Pumpenkontrolle. Wähle sie beim Anlegen eines Protokolleintrags aus und ergänze deinen Befund.")
@@ -36,11 +36,13 @@ import androidx.compose.ui.unit.dp
         if (t !in starterTemplates) TextButton(onClick = { save(d.copy(work = d.work.copy(templates = d.work.templates.filterNot { it.id == t.id }))) }, enabled = !busy) { Text("Vorlage entfernen") }
     } }
     if (editing) {
+        val recordId = rememberSaveable { selected?.id ?: newId() }
+        var trade by rememberSaveable { mutableStateOf(selected?.trade ?: "Alle") }
         var name by rememberSaveable { mutableStateOf(selected?.name ?: "") }; var title by rememberSaveable { mutableStateOf(selected?.title ?: "") }; var body by rememberSaveable { mutableStateOf(selected?.body ?: "") }
         Form("Vorlage", name.isNotBlank() && title.isNotBlank() && !busy, { editing = false }, {
-            val t = EntryTemplate(selected?.id ?: newId(), name.trim(), title.trim(), body)
-            save(d.copy(work = d.work.copy(templates = d.work.templates.filterNot { it.id == t.id } + t))); editing = false
-        }) { Field(name, { name = it }, "Name der Vorlage"); Field(title, { title = it }, "Titel der Tätigkeit"); Field(body, { body = it }, "Formular / Textbaustein", 6) }
+            val t = EntryTemplate(recordId, name.trim(), title.trim(), body, trade)
+            save(d.copy(work = d.work.copy(templates = d.work.templates.filterNot { it.id == t.id } + t))) { editing = false }
+        }) { Picker("Gewerk", listOf("Alle" to "Alle Gewerke") + availableTrades(d).map { it to it }, trade) { trade = it }; Field(name, { name = it }, "Name der Vorlage"); Field(title, { title = it }, "Titel der Tätigkeit"); Field(body, { body = it }, "Formular / Textbaustein", 6) }
     }
 }
 
@@ -65,8 +67,8 @@ import androidx.compose.ui.unit.dp
     } }
 }
 @Composable fun PasswordChangeDialog(busy: Boolean, close: () -> Unit, save: (CharArray, CharArray) -> Unit) {
-    var old by rememberSaveable { mutableStateOf("") }; var next by rememberSaveable { mutableStateOf("") }; var repeat by rememberSaveable { mutableStateOf("") }
-    Form("App-Passwort ändern", !busy && old.isNotEmpty() && next.length >= 10 && next == repeat && old != next, close, { save(old.toCharArray(), next.toCharArray()); old = ""; next = ""; repeat = "" }) {
+    var old by remember { mutableStateOf("") }; var next by remember { mutableStateOf("") }; var repeat by remember { mutableStateOf("") }
+    Form("App-Passwort ändern", !busy && old.isNotEmpty() && next.length >= 10 && next == repeat && old != next, close, { save(old.toCharArray(), next.toCharArray()) }) {
         listOf(Triple("Aktuelles Passwort", old, { x: String -> old = x }), Triple("Neues Passwort (mind. 10 Zeichen)", next, { x: String -> next = x }), Triple("Wiederholen", repeat, { x: String -> repeat = x })).forEach { (label, value, change) ->
             OutlinedTextField(value, change, label = { Text(label) }, visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation(), singleLine = true, keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = androidx.compose.ui.text.input.KeyboardType.Password), modifier = Modifier.fillMaxWidth())
         }
@@ -74,5 +76,5 @@ import androidx.compose.ui.unit.dp
     }
 }
 @Composable fun ConfirmRemoval(label: String, detail: String, busy: Boolean, close: () -> Unit, remove: () -> Unit) {
-    AlertDialog(onDismissRequest = close, title = { Text(label) }, text = { Text(detail) }, confirmButton = { TextButton(onClick = { remove(); close() }, enabled = !busy) { Text("Löschen") } }, dismissButton = { TextButton(onClick = close) { Text("Abbrechen") } })
+    AlertDialog(onDismissRequest = close, title = { Text(label) }, text = { Text(detail) }, confirmButton = { TextButton(onClick = remove, enabled = !busy) { Text("Löschen") } }, dismissButton = { TextButton(onClick = close) { Text("Abbrechen") } })
 }

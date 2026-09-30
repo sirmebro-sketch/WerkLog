@@ -66,6 +66,10 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
     override fun onResume() { super.onResume(); requestAutoBiometric() }
     private val biometric by lazy { BiometricLock(this) }
     private val notifications = registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted -> if (!granted) model.error = "Benachrichtigungen sind deaktiviert. Termine bleiben im lokalen Kalender sichtbar." }
+    fun contactAction(contact: Contact, email: Boolean) {
+        try { beginHandoff(); startActivity(Intent(if (email) Intent.ACTION_SENDTO else Intent.ACTION_DIAL, Uri.fromParts(if (email) "mailto" else "tel", if (email) contact.email else contact.phone, null))) }
+        catch (_: Exception) { model.error = "Keine passende Telefon- oder E-Mail-App verfügbar." }
+    }
     fun enableReminders() { if (android.os.Build.VERSION.SDK_INT >= 33) notifications.launch(android.Manifest.permission.POST_NOTIFICATIONS) }
     fun toggleBiometric() { if (biometric.enabled()) { biometric.disable(); model.error = "Biometrie deaktiviert." } else model.biometricKey()?.let { biometric.authenticate(it, { model.error = "Biometrie aktiviert. Für Sicherungen bleibt dein Passwort erforderlich." }, { model.error = it }) } }
     fun enableBiometric(done: () -> Unit) {
@@ -124,6 +128,8 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
     }
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        pendingBackup = savedInstanceState?.getString("backupFile")?.let { File(cacheDir, File(it).name).takeIf(File::isFile) }
+        restoreBytes = savedInstanceState?.getString("restoreFile")?.let { File(cacheDir, File(it).name).takeIf(File::isFile) }
         importBytes = savedInstanceState?.getString("importFile")?.let { File(cacheDir, File(it).name).takeIf(File::isFile) }
         handoffUntil = savedInstanceState?.getLong("handoffUntil") ?: 0L
         backgroundDeadline = savedInstanceState?.getLong("backgroundDeadline") ?: 0L
@@ -150,7 +156,7 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
             Surface(Modifier.fillMaxSize(), color = WerkColors.background) {
                 key("werklog") {
                     if (model.data == null) LockScreen(model, restoreBytes, { restore.launch(arrayOf("*/*")) }, { restoreBytes = null })
-                    else SecureWorkspaceState(model) { Workspace(model, onExport = {
+                    else SecureWorkspaceState(model) { CompositionLocalProvider(LocalSaving provides model.busy) { Workspace(model, onExport = {
                         lifecycleScope.launch {
                             val file = File(cacheDir, "backup-${newId()}.werklog")
                             try { model.backup(file); pendingBackup = file; beginHandoff(); export.launch("WerkLog-${java.time.LocalDate.now()}.werklog") }
@@ -159,11 +165,10 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
                     }, onShare = ::share, onShareFile = ::shareFile, onImport = { beginHandoff(); importAsset.launch(arrayOf("*/*")) }, onPhoto = ::requestPhoto, onOrder = ::sendOrder, requestedAsset = requestedAsset, assetOpened = { requestedAsset = null })
                     if (model.data != null && readyPhoto != null) {
                         val pending = readyPhoto!!
-                        PhotoReview(pending.first, pending.second, model.data!!, model.busy, { pending.first.delete(); readyPhoto = null }, { requestedAsset = it; readyPhoto = null }) { next ->
-                            try { model.update(next) } catch (_: Exception) { model.error = "Bild konnte nicht gespeichert werden. Größenbegrenzung prüfen." }
-                        }
+                        PhotoReview(pending.first, pending.second, model.data!!, model.busy, { pending.first.delete(); readyPhoto = null }, { requestedAsset = it; pending.first.delete(); readyPhoto = null }, DataSaver { next, done -> model.update(next, done) })
                     }
-                    if (model.data != null && importBytes != null) ImportAssetDialog(importBytes!!, model.data!!, model.busy, { importBytes?.delete(); importBytes = null }) { incoming, target, replace -> model.importShare(incoming, target, replace) }
+                    if (model.data != null && importBytes != null) ImportAssetDialog(importBytes!!, model.data!!, model.busy, { importBytes?.delete(); importBytes = null }) { incoming, target, replace, done -> model.importShare(incoming, target, replace, done) }
+                }
                 }
                 }
                 sourceTarget?.let { target -> AlertDialog(onDismissRequest = { sourceTarget = null }, title = { Text("Bild hinzufügen") },
@@ -194,6 +199,8 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
     override fun onSaveInstanceState(outState: Bundle) {
         model.checkpointDraft()
         importBytes?.let { outState.putString("importFile", it.name) }
+        pendingBackup?.let { outState.putString("backupFile", it.name) }
+        restoreBytes?.let { outState.putString("restoreFile", it.name) }
         outState.putLong("handoffUntil", handoffUntil)
         outState.putLong("backgroundDeadline", backgroundDeadline)
         val target = readyPhoto?.second ?: photoTarget
@@ -309,6 +316,7 @@ private fun java.io.InputStream.readBytesLimited(): ByteArray {
 
 @Composable private fun Workspace(model: WorkModel, onExport: () -> Unit, onShare: (String, String) -> Unit, onShareFile: (File) -> Unit, onImport: () -> Unit, onPhoto: (PhotoTarget) -> Unit, onOrder: (PartsOrder) -> Unit, requestedAsset: String?, assetOpened: () -> Unit) {
     val d = model.data ?: return
+    val saveData = remember(model) { DataSaver { next, done -> model.update(next, done) } }
     var tool by model.workspaceTool
     var page by model.workspacePage
     var dialog by rememberSaveable { mutableStateOf<String?>(null) }
@@ -342,14 +350,15 @@ private fun java.io.InputStream.readBytesLimited(): ByteArray {
     fun finishTour() { tour = -1; page = 0; tourPrefs.edit().putBoolean("done-v1", true).apply() }
     LaunchedEffect(tour, tourVisible) { if (tourVisible) { page = tourSteps[tour].first; tool = null; selectedAssetId = null } }
     BackHandler(enabled = tourVisible) { finishTour() }
-    CompositionLocalProvider(LocalRecordLink provides { kind, id ->
+    CompositionLocalProvider(LocalSaving provides model.busy, LocalRecordLink provides { kind, id ->
         dialog = null
         when (kind) {
             "Anlagen" -> { selectedAssetId = id; page = 1; tool = null }
             "Neue Bestellung" -> {
                 val order = PartsOrder(title = "Materialbedarf · ${assetName(d, id)}", assetId = id)
-                model.update(d.copy(work = d.work.copy(orders = d.work.orders + order)))
-                linkedRecord = order.id; tool = "Bestellungen"; page = 4
+                model.update(d.copy(work = d.work.copy(orders = d.work.orders + order))) {
+                    linkedRecord = order.id; tool = "Bestellungen"; page = 4
+                }
             }
             "Vorgang" -> { editEntry = d.entries.find { it.id == id }; dialog = "entry" }
             else -> { linkedRecord = id; tool = kind; page = 4 }
@@ -371,13 +380,13 @@ private fun java.io.InputStream.readBytesLimited(): ByteArray {
             back = { if (tour > 0) tour-- }, skip = { finishTour() },
             next = { if (tour == tourSteps.lastIndex) finishTour() else tour++ })
         NavigationBar(containerColor = WerkColors.surface) {
-            NavigationBarItem(selected = page == 0, onClick = { page = 0; tool = null }, icon = { Icon(Icons.Outlined.Today, "Heute") }, label = { Text("Heute") })
-            NavigationBarItem(selected = page in 1..4, onClick = { page = 4; tool = null; selectedAssetId = null }, icon = {
+            NavigationBarItem(selected = page == 0, enabled = !model.busy, onClick = { page = 0; tool = null }, icon = { Icon(Icons.Outlined.Today, "Heute") }, label = { Text("Heute") })
+            NavigationBarItem(selected = page in 1..4, enabled = !model.busy, onClick = { page = 4; tool = null; selectedAssetId = null }, icon = {
                 Surface(shape = androidx.compose.foundation.shape.CircleShape, color = Mint, modifier = Modifier.size(58.dp)) {
                     Box(contentAlignment = Alignment.Center) { Icon(PowerPlantIcon, "Betrieb", tint = WerkColors.background, modifier = Modifier.size(32.dp)) }
                 }
             }, label = { Text("Betrieb", fontWeight = FontWeight.Bold) })
-            NavigationBarItem(selected = page == 5, onClick = { page = 5; tool = null }, icon = { Icon(Icons.Outlined.Settings, "Einstellung") }, label = { Text("Einstellung") })
+            NavigationBarItem(selected = page == 5, enabled = !model.busy, onClick = { page = 5; tool = null }, icon = { Icon(Icons.Outlined.Settings, "Einstellung") }, label = { Text("Einstellung") })
         }
         }
     }) { padding ->
@@ -424,6 +433,16 @@ private fun java.io.InputStream.readBytesLimited(): ByteArray {
                         Text(e.title, fontWeight = FontWeight.Bold); Text("${e.start} · ${e.company}", color = Mint)
                         TextButton(onClick = { page = 4; tool = "Kalender" }) { Text("Kalender öffnen") }
                     } } }
+                    val dueWork = dueEntries(d, java.time.LocalDate.now().plusDays(7))
+                    if (dueWork.isNotEmpty()) {
+                        Section("Fällige Arbeiten · nächste 7 Tage")
+                        dueWork.take(5).forEach { e -> EntryCard(e, d) { editEntry = e; dialog = "entry" } }
+                    }
+                    val deliveries = dueOrders(d, java.time.LocalDate.now().plusDays(7))
+                    if (deliveries.isNotEmpty()) {
+                        Section("Lieferungen im Blick")
+                        deliveries.take(5).forEach { o -> RecordLink("Bestellungen", o.id, "${o.title} · ${o.delivery} · ${o.status}") }
+                    }
                     Section("Für die nächste Übergabe")
                     val open = d.entries.filter { it.status != "Erledigt" }.sortedWith(compareByDescending<Entry> { priorities.indexOf(it.priority) }.thenByDescending { it.updated })
                     if (open.isEmpty()) Hint("Keine offenen Einträge. Neue Störungen erscheinen hier.")
@@ -434,7 +453,7 @@ private fun java.io.InputStream.readBytesLimited(): ByteArray {
                     val selected = d.assets.find { it.id == selectedAssetId }
                     if (selected != null) {
                         AssetDetails(selected, d, model.busy, { selectedAssetId = null }, { editAsset = selected; dialog = "asset" },
-                            { next -> model.update(next) },
+                            saveData,
                             { editEntry = null; preselectedAssetId = selected.id; dialog = "entry" },
                             { editReading = null; preselectedAssetId = selected.id; dialog = "reading" },
                             { e -> editEntry = e; dialog = "entry" }, onShareFile, onPhoto)
@@ -450,7 +469,7 @@ private fun java.io.InputStream.readBytesLimited(): ByteArray {
                         val filtered = searchAssets(d, query).filter { (tradeFilter.isBlank() || it.trade == tradeFilter) && (!favorites || it.favorite) }
                         Text("${filtered.size} von ${d.assets.size} Anlagen", color = Muted)
                         if (filtered.isEmpty()) Hint("Keine Anlagen gefunden. Lege deine erste Anlage an oder ändere die Suche.")
-                        filtered.forEach { a ->
+                        PagedRecords(filtered, "$query:$tradeFilter:$favorites", { it.id }) { a ->
                             OutlinedButton(onClick = { selectedAssetId = a.id; model.update(d.copy(assets = d.assets.map { if (it.id == a.id) it.copy(lastOpened = System.currentTimeMillis()) else it })) }, modifier = Modifier.fillMaxWidth(), contentPadding = PaddingValues(12.dp)) {
                                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
                                     AssetThumbnail(a.coverImage)
@@ -472,16 +491,16 @@ private fun java.io.InputStream.readBytesLimited(): ByteArray {
                     Choices(listOf("Störungen", "Messwerte"), kind) { kind = it }
                     Field(query, { query = it }, "Arbeitsprotokoll durchsuchen")
                     if (kind == "Störungen") {
-                        Choices(listOf("Alle") + statuses, filter) { filter = it }
+                        Choices(listOf("Alle", "Fällig") + statuses, filter) { filter = it }
                         Button(onClick = { editEntry = null; preselectedAssetId = null; dialog = "entry" }, enabled = d.assets.isNotEmpty() && !model.busy) { Text("+ Eintrag") }
-                        val list = d.entries.filter { (filter == "Alle" || it.status == filter) && "${it.title} ${it.note} ${assetName(d, it.assetId)}".contains(query, true) }.sortedByDescending { it.updated }
+                        val list = d.entries.filter { (filter == "Alle" || it.status == filter || (filter == "Fällig" && entryDue(it))) && "${it.title} ${it.note} ${assetName(d, it.assetId)}".contains(query, true) }.sortedByDescending { it.updated }
                         if (list.isEmpty()) Hint("Keine passenden Einträge.")
-                        list.forEach { e -> EntryCard(e, d, { editEntry = e; dialog = "entry" }) }
+                        PagedRecords(list, "$query:$filter", { it.id }) { e -> EntryCard(e, d, { editEntry = e; dialog = "entry" }) }
                     } else {
                         Button(onClick = { editReading = null; preselectedAssetId = null; dialog = "reading" }, enabled = d.assets.isNotEmpty() && !model.busy) { Text("+ Messwert erfassen") }
                         val list = d.readings.filter { "${it.label} ${assetName(d, it.assetId)}".contains(query, true) }.sortedByDescending { it.created }
                         if (list.isEmpty()) Hint("Noch keine passenden Messwerte. Es werden keine Grenzwerte oder automatischen Sicherheitsbewertungen angenommen.")
-                        list.forEach { r -> Panel {
+                        PagedRecords(list, query, { it.id }) { r -> Panel {
                             Text(assetName(d, r.assetId), color = Mint, fontSize = 12.sp); Text(r.label, fontWeight = FontWeight.Bold)
                             Text("${r.value} ${r.unit}", fontSize = 28.sp); Text(stamp(r.created), color = Muted, fontSize = 12.sp)
                             if (r.note.isNotBlank()) Text(r.note)
@@ -504,7 +523,7 @@ private fun java.io.InputStream.readBytesLimited(): ByteArray {
                     } }
                 }
                 4 -> {
-                    if (tool != null) CompositionLocalProvider(LocalGuideStepAction provides { nextGuideStep = it }) { WorkTools(tool!!, d, model.busy, { tool = null }, { model.update(it) }, onPhoto, onOrder, linkedRecord) { linkedRecord = null } }
+                    if (tool != null) CompositionLocalProvider(LocalGuideStepAction provides { nextGuideStep = it }) { WorkTools(tool!!, d, model.busy, { tool = null }, saveData, onPhoto, onOrder, linkedRecord) { linkedRecord = null } }
                     else OperationTiles { label -> when (label) {
                         "Anlagen" -> { page = 1; selectedAssetId = null }
                         "Arbeitsprotokoll" -> page = 2
@@ -515,8 +534,8 @@ private fun java.io.InputStream.readBytesLimited(): ByteArray {
                 5 -> {
                     val lastBackup = context.getSharedPreferences("backup", 0).getLong("lastBackup", 0)
                     if (System.currentTimeMillis() - lastBackup > 7L * 86400000) Hint("Sicherung fällig: Seit mindestens sieben Tagen keine vollständige Sicherung exportiert.")
-                    ProfilePanel(d, model.busy, { model.update(it) }, onPhoto)
-                    TradeSettings(d, model.busy) { model.update(it) }
+                    ProfilePanel(d, model.busy, saveData, onPhoto)
+                    TradeSettings(d, model.busy, saveData)
                     Panel { Text("Dein Datentresor", fontSize = 23.sp, fontWeight = FontWeight.Bold)
                         Text("Lokal verschlüsselt · Ohne Internetberechtigung", color = Mint)
                         Text("${imageValues(d).count { it.isNotEmpty() }} / $MAX_IMAGES Bilder · ${model.storageBytes() / (1024 * 1024)} MiB belegt")
@@ -533,7 +552,7 @@ private fun java.io.InputStream.readBytesLimited(): ByteArray {
                     Hint("WerkLog dokumentiert Beobachtungen und Tätigkeiten. Freigaben, Betriebsanweisungen und eure offiziellen Meldewege bleiben maßgeblich. Keine Anlagensteuerung oder Verbindung zur GLT.")
                     OutlinedButton(onClick = { dialog = "password" }, enabled = !model.busy, modifier = Modifier.fillMaxWidth()) { Text("App-Passwort ändern") }
                     OutlinedButton(onClick = { tour = 0; page = 0 }, modifier = Modifier.fillMaxWidth()) { Text("Kurze App-Führung starten") }
-                    Text("WERKLOG 0.5.0 · KOTLIN / ANDROID", color = Muted, fontSize = 11.sp)
+                    Text("WERKLOG 0.6.0 · KOTLIN / ANDROID", color = Muted, fontSize = 11.sp)
                 }
             }
             Spacer(Modifier.height(24.dp))
@@ -547,25 +566,25 @@ private fun java.io.InputStream.readBytesLimited(): ByteArray {
             activity.enableBiometric { biometricPromptRunning = false }
         }, enabled = !model.busy) { Text("Jetzt aktivieren") } },
         dismissButton = { TextButton(onClick = model::dismissBiometricOffer) { Text("Später") } })
-    if (dialog == "password") PasswordChangeDialog(model.busy, { dialog = null }) { old, next -> model.changePassword(old, next); dialog = null }
-    if (dialog == "asset") AssetEditor(editAsset, d.assets, availableTrades(d), { dialog = null }) { a -> model.update(d.copy(assets = d.assets.filterNot { it.id == a.id } + a)); dialog = null }
-    if (dialog == "entry") EntryEditor(editEntry, d, model.busy, { model.update(it) }, d.assets, d.work.templates, preselectedAssetId, { dialog = null }, { editEntry?.let { removal = "entry" to it.id }; dialog = null }, { e ->
+    if (dialog == "password") PasswordChangeDialog(model.busy, { dialog = null }) { old, next -> model.changePassword(old, next) { dialog = null } }
+    if (dialog == "asset") AssetEditor(editAsset, d.assets, availableTrades(d), { dialog = null }) { a -> model.update(d.copy(assets = d.assets.filterNot { it.id == a.id } + a)) { dialog = null } }
+    if (dialog == "entry") EntryEditor(editEntry, d, model.busy, saveData, d.assets, d.work.templates, preselectedAssetId, { dialog = null }, { editEntry?.let { removal = "entry" to it.id }; dialog = null }, { e ->
         val order = orderFromEntry(e)
-        model.update(d.copy(entries = d.entries.filterNot { it.id == e.id } + e, work = d.work.copy(orders = d.work.orders + order))); linkedRecord = order.id; dialog = null; page = 4; tool = "Bestellungen"
+        model.update(d.copy(entries = d.entries.filterNot { it.id == e.id } + e, work = d.work.copy(orders = d.work.orders + order))) { linkedRecord = order.id; dialog = null; page = 4; tool = "Bestellungen" }
     }, { e ->
-        model.update(d.copy(entries = d.entries.filterNot { it.id == e.id } + e, work = d.work.copy(appointments = d.work.appointments + Appointment(title = e.title, start = formatAppointment(java.time.LocalDate.now().plusDays(1).atTime(8, 0)), assetId = e.assetId, note = e.note)))); dialog = null; page = 4; tool = "Kalender"
-    }) { e -> model.update(d.copy(entries = d.entries.filterNot { it.id == e.id } + e)); dialog = null }
-    if (dialog == "reading") ReadingEditor(editReading, d.assets, preselectedAssetId, { dialog = null }) { r -> model.update(d.copy(readings = d.readings.filterNot { it.id == r.id } + r)); dialog = null }
-    if (dialog == "round") RoundEditor(editRound, { dialog = null }) { r -> model.update(d.copy(rounds = d.rounds.filterNot { it.id == r.id } + r)); dialog = null }
+        model.update(d.copy(entries = d.entries.filterNot { it.id == e.id } + e, work = d.work.copy(appointments = d.work.appointments + Appointment(title = e.title, start = formatAppointment(java.time.LocalDate.now().plusDays(1).atTime(8, 0)), assetId = e.assetId, note = e.note)))) { dialog = null; page = 4; tool = "Kalender" }
+    }) { e -> model.update(d.copy(entries = d.entries.filterNot { it.id == e.id } + e)) { dialog = null } }
+    if (dialog == "reading") ReadingEditor(editReading, d.assets, preselectedAssetId, { dialog = null }) { r -> model.update(d.copy(readings = d.readings.filterNot { it.id == r.id } + r)) { dialog = null } }
+    if (dialog == "round") RoundEditor(editRound, { dialog = null }) { r -> model.update(d.copy(rounds = d.rounds.filterNot { it.id == r.id } + r)) { dialog = null } }
     removal?.let { (kind, id) -> ConfirmRemoval("Eintrag löschen?", "Dieser lokale Eintrag wird entfernt. Bereits erstellte Sicherungen und abgeschlossene Rundgänge bleiben unverändert.", model.busy, { removal = null }) {
         model.update(when (kind) {
             "entry" -> removeEntry(d, id)
             "reading" -> d.copy(readings = d.readings.filterNot { it.id == id })
             "round" -> d.copy(rounds = d.rounds.filterNot { it.id == id })
             else -> d.copy(runs = d.runs.filterNot { it.id == id })
-        })
+        }) { removal = null }
     } }
-    run?.let { r -> RoundRunner(r, { run = null }) { result -> model.update(d.copy(runs = d.runs + result)); run = null } }
+    run?.let { r -> RoundRunner(r, { run = null }) { result -> model.update(d.copy(runs = d.runs.filterNot { it.id == result.id } + result)) { run = null } } }
     mail?.let { m -> AlertDialog(onDismissRequest = { mail = null }, title = { Text("E-Mail-Vorschau") }, text = {
         Column(Modifier.heightIn(max = 450.dp).verticalScroll(rememberScrollState())) {
             Text("Der folgende Text wird unverschlüsselt an deine E-Mail-App übergeben. Empfänger und Versand bestimmst du dort.", color = Amber)
@@ -582,46 +601,58 @@ private fun java.io.InputStream.readBytesLimited(): ByteArray {
 @Composable private fun Empty(title: String, body: String, click: () -> Unit) { Panel { Text(title, fontWeight = FontWeight.Bold); Hint(body); TextButton(onClick = click) { Text("Erste Anlage anlegen") } } }
 @Composable internal fun EntryCard(e: Entry, d: Data, click: () -> Unit) { Panel {
     Text("${e.priority.uppercase()}  ·  ${e.status}", color = if (e.priority == "Dringend") Amber else Mint, fontSize = 11.sp)
+    if (e.dueDate.isNotBlank()) Text("Fällig: ${e.dueDate}" + if (entryOverdue(e)) " · Überfällig" else "", color = if (entryOverdue(e)) Amber else Mint, fontSize = 12.sp)
     Text(e.title, fontSize = 20.sp, fontWeight = FontWeight.Bold); Text(assetName(d, e.assetId), color = Muted)
     if (e.note.isNotBlank()) Text(e.note, maxLines = 3)
     Text(stamp(e.updated), fontSize = 11.sp, color = Muted); TextButton(onClick = click) { Text("Öffnen & bearbeiten") }
 } }
 @Composable internal fun Field(value: String, change: (String) -> Unit, label: String, lines: Int = 1, numeric: Boolean = false) {
-    OutlinedTextField(value, { if (it.length <= 10000) change(it) }, label = { Text(label) }, modifier = Modifier.fillMaxWidth().padding(bottom = 10.dp), minLines = lines, maxLines = if (lines == 1) 1 else 8,
+    OutlinedTextField(value, { if (it.length <= 10000) change(it) }, label = { Text(label) }, modifier = Modifier.fillMaxWidth().padding(bottom = 10.dp), enabled = !LocalSaving.current, minLines = lines, maxLines = if (lines == 1) 1 else 8,
         singleLine = lines == 1, keyboardOptions = KeyboardOptions(keyboardType = if (numeric) KeyboardType.Decimal else KeyboardType.Text))
 }
 @OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 @Composable internal fun Choices(options: List<String>, selected: String, change: (String) -> Unit) {
-    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) { options.forEach { FilterChip(selected == it, { change(it) }, label = { Text(it) }) } }
+    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) { options.forEach { FilterChip(selected == it, { change(it) }, label = { Text(it) }, enabled = !LocalSaving.current) } }
 }
 @Composable internal fun Picker(label: String, values: List<Pair<String, String>>, selected: String, change: (String) -> Unit) {
-    var expanded by rememberSaveable { mutableStateOf(false) }
-    Box { OutlinedButton(onClick = { expanded = true }, modifier = Modifier.fillMaxWidth()) { Text("$label: ${values.find { it.first == selected }?.second ?: "Auswählen"}") }
-        DropdownMenu(expanded, { expanded = false }) { values.forEach { v -> DropdownMenuItem(text = { Text(v.second) }, onClick = { change(v.first); expanded = false }) } }
+    var expanded by rememberSaveable { mutableStateOf(false) }; var query by rememberSaveable { mutableStateOf("") }
+    Box { OutlinedButton(onClick = { query = ""; expanded = true }, enabled = !LocalSaving.current, modifier = Modifier.fillMaxWidth()) { Text("$label: ${values.find { it.first == selected }?.second ?: "Auswählen"}") }
+        DropdownMenu(expanded, { expanded = false }, modifier = Modifier.heightIn(max = 380.dp)) {
+            if (values.size > 8) OutlinedTextField(query, { query = it }, label = { Text("$label suchen") }, singleLine = true, modifier = Modifier.padding(8.dp).width(260.dp))
+            values.filter { it.second.contains(query, true) }.forEach { v -> DropdownMenuItem(text = { Text(v.second) }, onClick = { change(v.first); expanded = false }) } }
     }
 }
 @Composable internal fun Form(title: String, valid: Boolean, close: () -> Unit, save: () -> Unit, confirmLabel: String = "Speichern", content: @Composable ColumnScope.() -> Unit) {
-    AlertDialog(onDismissRequest = close, title = { Text(title) }, text = { Column(Modifier.heightIn(max = 520.dp).verticalScroll(rememberScrollState()), content = content) },
-        confirmButton = { TextButton(onClick = save, enabled = valid) { Text(confirmLabel) } }, dismissButton = { TextButton(onClick = close) { Text("Abbrechen") } })
+    val saving = LocalSaving.current
+    AlertDialog(onDismissRequest = { if (!saving) close() }, title = { Text(title) }, text = { Column(Modifier.heightIn(max = 520.dp).verticalScroll(rememberScrollState()), content = content) },
+        confirmButton = { TextButton(onClick = save, enabled = valid && !saving) { Text(confirmLabel) } }, dismissButton = { TextButton(onClick = close, enabled = !saving) { Text("Abbrechen") } })
 }
-@Composable private fun EntryEditor(existing: Entry?, data: Data, busy: Boolean, saveData: (Data) -> Unit, assets: List<Asset>, templates: List<EntryTemplate>, initialAssetId: String?, close: () -> Unit, delete: () -> Unit, order: (Entry) -> Unit, appointment: (Entry) -> Unit, save: (Entry) -> Unit) {
+@Composable private fun EntryEditor(existing: Entry?, data: Data, busy: Boolean, saveData: DataSaver, assets: List<Asset>, templates: List<EntryTemplate>, initialAssetId: String?, close: () -> Unit, delete: () -> Unit, order: (Entry) -> Unit, appointment: (Entry) -> Unit, save: (Entry) -> Unit) {
     var asset by rememberSaveable { mutableStateOf(existing?.assetId ?: initialAssetId ?: assets.firstOrNull()?.id.orEmpty()) }
     var title by rememberSaveable { mutableStateOf(existing?.title ?: "") }; var note by rememberSaveable { mutableStateOf(existing?.note ?: "") }
     var priority by rememberSaveable { mutableStateOf(existing?.priority ?: "Normal") }; var status by rememberSaveable { mutableStateOf(existing?.status ?: "Offen") }
     var minutes by rememberSaveable { mutableStateOf((existing?.minutes ?: 0).toString()) }
     var guideIds by rememberSaveable { mutableStateOf(existing?.guideIds ?: emptyList<String>()) }
-    fun current() = Entry(existing?.id ?: newId(), asset, title.trim(), note.trim(), priority, status, existing?.created ?: System.currentTimeMillis(), System.currentTimeMillis(), minutes.toIntOrNull() ?: 0, guideIds)
+    val recordId = rememberSaveable { existing?.id ?: newId() }
+    var dueDate by rememberSaveable { mutableStateOf(existing?.dueDate ?: "") }
+    val validEntry = title.isNotBlank() && asset.isNotEmpty() && minutes.toIntOrNull()?.let { it >= 0 } == true && (dueDate.isBlank() || parseServiceDate(dueDate) != null)
+    fun current() = Entry(recordId, asset, title.trim(), note.trim(), priority, status, existing?.created ?: System.currentTimeMillis(), System.currentTimeMillis(), minutes.toIntOrNull() ?: 0, guideIds, dueDate.trim())
     val navigate = LocalRecordLink.current
-    CompositionLocalProvider(LocalRecordLink provides { kind, id ->
-        if (!busy && title.isNotBlank() && asset.isNotEmpty() && minutes.toIntOrNull()?.let { it >= 0 } == true) { save(current()); navigate(kind, id) }
+    CompositionLocalProvider(LocalSaving provides model.busy, LocalRecordLink provides { kind, id ->
+        if (!busy && validEntry) {
+            val e = current()
+            saveData(data.copy(entries = data.entries.filterNot { it.id == e.id } + e)) { close(); navigate(kind, id) }
+        }
     }) {
-    Form("Störung / Tätigkeit", !busy && title.isNotBlank() && asset.isNotEmpty() && (minutes.toIntOrNull()?.let { it >= 0 } == true), close, {
+    Form("Störung / Tätigkeit", !busy && validEntry, close, {
         save(current())
     }) {
         if (existing == null) Picker("Vorlage", (starterTemplates + templates).map { it.id to it.name }, "") { id -> (starterTemplates + templates).find { it.id == id }?.let { title = it.title; note = it.body } }
         Picker("Anlage", assets.map { it.id to it.name }, asset) { asset = it }; Field(title, { title = it }, "Kurzbeschreibung *")
         Field(note, { note = it }, "Beobachtung, Maßnahmen, nächste Schritte", 4); Text("Priorität"); Choices(priorities, priority) { priority = it }
         Text("Status"); Choices(statuses, status) { status = it }; Field(minutes, { minutes = it }, "Zeitaufwand in Minuten", numeric = true)
+        Field(dueDate, { dueDate = it }, "Fällig bis (TT.MM.JJJJ, optional)")
+        if (dueDate.isNotBlank() && parseServiceDate(dueDate) == null) Text("Bitte ein gültiges Datum eingeben.", color = Amber)
         LinkChoices("Passende Anleitungen", data.work.guides.map { it.id to it.title }, guideIds) { guideIds = it }
         data.work.guides.filter { it.id in guideIds || (it.assetId == asset && asset.isNotBlank()) }.forEach { g ->
             val open = LocalRecordLink.current
@@ -630,34 +661,37 @@ private fun java.io.InputStream.readBytesLimited(): ByteArray {
         if (existing != null) {
             ContactLinks(data, "Vorgang", existing.id, busy, saveData)
             data.work.orders.filter { it.entryId == existing.id }.forEach { o -> RecordLink("Bestellungen", o.id, "Bestellung: ${o.title}") }
-            TextButton(onClick = { order(current()) }, enabled = !busy && title.isNotBlank() && minutes.toIntOrNull()?.let { it >= 0 } == true) { Text("Teileanforderung aus diesem Vorgang") }
-            TextButton(onClick = { appointment(current()) }) { Text("Folgetermin anlegen (morgen 08:00, danach bearbeiten)") }
+            TextButton(onClick = { order(current()) }, enabled = !busy && validEntry) { Text("Teileanforderung aus diesem Vorgang") }
+            TextButton(onClick = { appointment(current()) }, enabled = !busy && validEntry) { Text("Folgetermin anlegen (morgen 08:00, danach bearbeiten)") }
             TextButton(onClick = delete) { Text("Vorgang löschen", color = MaterialTheme.colorScheme.error) }
         }
-        if (existing != null) TextButton(onClick = { save(existing.copy(id = newId(), title = "$title (Kopie)", note = note, status = "Offen", created = System.currentTimeMillis(), updated = System.currentTimeMillis(), minutes = 0)) }) { Text("Als neue Tätigkeit duplizieren") }
+        if (existing != null) TextButton(onClick = { save(current().copy(id = newId(), title = "$title (Kopie)", status = "Offen", created = System.currentTimeMillis(), updated = System.currentTimeMillis(), minutes = 0)) }) { Text("Als neue Tätigkeit duplizieren") }
     }
     }
 }
 @Composable private fun ReadingEditor(existing: Reading?, assets: List<Asset>, initialAssetId: String?, close: () -> Unit, save: (Reading) -> Unit) {
+    val recordId = rememberSaveable { existing?.id ?: newId() }
     var asset by rememberSaveable { mutableStateOf(existing?.assetId ?: initialAssetId ?: assets.firstOrNull()?.id.orEmpty()) }; var label by rememberSaveable { mutableStateOf(existing?.label ?: "") }
     var value by rememberSaveable { mutableStateOf(existing?.value?.toString() ?: "") }; var unit by rememberSaveable { mutableStateOf(existing?.unit ?: "bar") }; var note by rememberSaveable { mutableStateOf(existing?.note ?: "") }
     Form("Messwert erfassen", asset.isNotEmpty() && label.isNotBlank() && number(value) != null && unit.isNotBlank(), close, {
-        save(if (existing == null) Reading(assetId = asset, label = label.trim(), value = number(value)!!, unit = unit.trim(), note = note.trim()) else existing.copy(value = number(value)!!, note = note.trim()))
+        save(if (existing == null) Reading(id = recordId, assetId = asset, label = label.trim(), value = number(value)!!, unit = unit.trim(), note = note.trim()) else existing.copy(value = number(value)!!, note = note.trim()))
     }) { if (existing == null) { Picker("Anlage", assets.map { it.id to it.name }, asset) { asset = it }; Field(label, { label = it }, "Messpunkt *") } else Text("${existing.label} · ${existing.unit} · ursprünglicher Zeitpunkt bleibt erhalten")
         Field(value, { value = it }, "Messwert *", numeric = true); if (existing == null) Field(unit, { unit = it }, "Einheit *"); Field(note, { note = it }, "Beobachtung", 2) }
 }
 @Composable private fun RoundEditor(existing: Round?, close: () -> Unit, save: (Round) -> Unit) {
+    val recordId = rememberSaveable { existing?.id ?: newId() }
     var title by rememberSaveable { mutableStateOf(existing?.title ?: "") }; var points by rememberSaveable { mutableStateOf(existing?.checks?.joinToString("\n") ?: "") }
     val checks = points.lines().map { it.trim() }.filter { it.isNotEmpty() }
-    Form("Checkliste erstellen", title.isNotBlank() && checks.size in 1..100, close, { save(Round(id = existing?.id ?: newId(), title = title.trim(), checks = checks)) }) {
+    Form("Checkliste erstellen", title.isNotBlank() && checks.size in 1..100, close, { save(Round(id = recordId, title = title.trim(), checks = checks)) }) {
         Field(title, { title = it }, "Name *"); Field(points, { points = it }, "Ein Prüfpunkt pro Zeile *", 6)
         Hint("Nur eure freigegebenen Kontrollen übernehmen. Maximal 100 Punkte.")
     }
 }
 @Composable private fun RoundRunner(round: Round, close: () -> Unit, save: (RoundRun) -> Unit) {
+    val recordId = rememberSaveable { newId() }
     var results by rememberSaveable { mutableStateOf(List(round.checks.size) { "Ungeprüft" }) }; var note by rememberSaveable { mutableStateOf("") }
     Form(round.title, results.any { it != "Ungeprüft" } && (!results.contains("Auffällig") || note.isNotBlank()), close, {
-        save(RoundRun(title = round.title, results = round.checks.mapIndexed { i, check -> "${results[i]} · $check" }, note = note.trim()))
+        save(RoundRun(id = recordId, title = round.title, results = round.checks.mapIndexed { i, check -> "${results[i]} · $check" }, note = note.trim()))
     }) { round.checks.forEachIndexed { i, text -> Text(text, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 12.dp))
         Choices(listOf("Ungeprüft", "In Ordnung", "Auffällig"), results[i]) { v -> results = results.toMutableList().also { it[i] = v } }
     }; Field(note, { note = it }, if (results.contains("Auffällig")) "Auffälligkeit / Maßnahme *" else "Notiz", 3)

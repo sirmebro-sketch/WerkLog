@@ -69,7 +69,11 @@ class WorkModel(app: Application) : AndroidViewModel(app) {
             var derived: ByteArray? = null
             try {
                 val result = withContext(Dispatchers.IO) {
-                    if (backup != null) return@withContext repository.restore(backup, password).also { derived = it.second; draftFile.delete(); workspacePage.intValue = 0; workspaceTool.value = null }
+                    if (backup != null) return@withContext repository.restore(backup, password).also {
+                        derived = it.second; draftFile.delete(); workspacePage.intValue = 0; workspaceTool.value = null
+                        getApplication<Application>().getSharedPreferences("biometric", 0).edit().clear().apply()
+                        runCatching { java.security.KeyStore.getInstance("AndroidKeyStore").apply { load(null); deleteEntry("werklog-biometric-v1") } }
+                    }
                     val bytes = if (exists) repository.envelope() else null
                     val s = bytes?.let(Vault::saltOf) ?: Vault.salt()
                     val k = Vault.key(password, s); derived = k
@@ -95,7 +99,7 @@ class WorkModel(app: Application) : AndroidViewModel(app) {
             finally { exists = repository.exists(); if (data == null) { key?.fill(0); key = null; salt = null }; backup?.delete(); derived?.fill(0); password.fill('\u0000'); busy = false }
         }
     }
-    fun update(next: Data) {
+    fun update(next: Data, onSaved: () -> Unit = {}) {
         if (busy) { error = "Ein Speichervorgang läuft bereits. Bitte danach erneut bearbeiten."; return }
         val k = key?.copyOf() ?: return
         val s = salt?.copyOf() ?: return
@@ -104,7 +108,7 @@ class WorkModel(app: Application) : AndroidViewModel(app) {
         viewModelScope.launch {
             try {
                 val normalized = withContext(Dispatchers.IO) { repository.save(next, k, s) }
-                if (generation == attempt) data = normalized
+                if (generation == attempt) { data = normalized; onSaved() }
                 runCatching { Reminders.update(getApplication(), normalized) }
             } catch (_: Exception) { error = "Speichern fehlgeschlagen. Änderung wurde nicht übernommen. Daten- und Bildlimit prüfen." }
             finally { k.fill(0); busy = false }
@@ -115,15 +119,15 @@ class WorkModel(app: Application) : AndroidViewModel(app) {
         val k = key?.copyOf() ?: error("Tresor gesperrt")
         return try { withContext(Dispatchers.IO) { repository.image(value, k) } } finally { k.fill(0) }
     }
-    fun importShare(opened: OpenShare, target: String?, replace: Boolean) {
+    fun importShare(opened: OpenShare, target: String?, replace: Boolean, completed: (Boolean) -> Unit = {}) {
         val current = data; val k = key?.copyOf(); val s = salt?.copyOf()
-        if (busy || current == null || k == null || s == null) { k?.fill(0); opened.close(); return }
+        if (busy || current == null || k == null || s == null) { k?.fill(0); opened.close(); completed(false); return }
         busy = true; val attempt = generation
         viewModelScope.launch {
             try {
                 val result = withContext(Dispatchers.IO) {
                     val candidate = if (target == null) importPackage(current, opened.data) else mergePackage(current, opened.data, target, replace)
-                    validateWork(candidate.work, candidate.assets.map { it.id }.toSet())
+                    validateData(candidate)
                     val replacements = mutableMapOf<String, String>()
                     for (image in imageValues(opened.data).filter { it.isNotEmpty() }.distinct()) {
                         val bytes = opened.image(image)
@@ -133,16 +137,19 @@ class WorkModel(app: Application) : AndroidViewModel(app) {
                     val next = if (target == null) {
                         // Reuse the single generated copy identity from the validated preview.
                         val id = candidate.assets.last().id
-                        mergePackage(current.copy(assets = candidate.assets), localized, id, false)
+                        importPackage(current, localized, id)
                     } else mergePackage(current, localized, target, replace)
                     repository.save(next, k, s)
                 }
-                if (attempt == generation) data = result
-            } catch (_: Exception) { error = "Import fehlgeschlagen. Bildlimit oder freien Speicher prüfen. Bestehende Einträge bleiben erhalten." }
+                if (attempt == generation) { data = result; runCatching { Reminders.update(getApplication(), result) }; completed(true) }
+            } catch (_: Exception) {
+                withContext(Dispatchers.IO) { runCatching { repository.discardUnreferenced(k) } }
+                error = "Import fehlgeschlagen. Bildlimit oder freien Speicher prüfen. Bestehende Einträge bleiben erhalten."; completed(false)
+            }
             finally { k.fill(0); opened.close(); busy = false }
         }
     }
-    fun changePassword(oldPassword: CharArray, nextPassword: CharArray) {
+    fun changePassword(oldPassword: CharArray, nextPassword: CharArray, onSaved: () -> Unit = {}) {
         val currentKey = key?.copyOf()
         if (busy || currentKey == null) { currentKey?.fill(0); oldPassword.fill('\u0000'); nextPassword.fill('\u0000'); return }
         busy = true; val attempt = generation
@@ -157,9 +164,9 @@ class WorkModel(app: Application) : AndroidViewModel(app) {
                 }
                 getApplication<Application>().getSharedPreferences("backup", 0).edit().putLong("lastBackup", 0).apply()
                 getApplication<Application>().getSharedPreferences("biometric", 0).edit().clear().apply()
-                java.security.KeyStore.getInstance("AndroidKeyStore").apply { load(null); deleteEntry("werklog-biometric-v1") }
+                runCatching { java.security.KeyStore.getInstance("AndroidKeyStore").apply { load(null); deleteEntry("werklog-biometric-v1") } }
                 if (attempt == generation) { key?.fill(0); key = changed.second; resultKey = null; salt = changed.first; data = changed.third; checkpointDraft() }
-                else if (draftFile.exists()) {
+                else if (draftFile.exists()) runCatching {
                     val rawDraft = Vault.decrypt(draftFile.readBounded(Vault.MAX_BYTES), currentKey)
                     try {
                         val atomic = AtomicFile(draftFile); val stream = atomic.startWrite()
@@ -167,6 +174,7 @@ class WorkModel(app: Application) : AndroidViewModel(app) {
                         catch (e: Exception) { atomic.failWrite(stream); throw e }
                     } finally { rawDraft.fill(0) }
                 }
+                onSaved()
                 error = "Passwort geändert. Bitte neue Sicherung erstellen; ältere Sicherungen behalten ihr bisheriges Passwort."
             } catch (_: Exception) { error = "Passwortwechsel fehlgeschlagen. Aktuelles Passwort und freien Speicher prüfen." }
             finally { resultKey?.fill(0); currentKey.fill(0); oldPassword.fill('\u0000'); nextPassword.fill('\u0000'); busy = false }

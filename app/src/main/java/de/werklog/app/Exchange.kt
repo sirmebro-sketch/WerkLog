@@ -68,8 +68,8 @@ fun assetPackage(data: Data, id: String, credentials: Boolean, history: Boolean,
             guides = data.work.guides.filter { it.assetId == id }))
 }
 /** Import as a new local copy; never replace the receiver's existing asset or records. */
-fun importPackage(current: Data, incoming: Data): Data {
+fun importPackage(current: Data, incoming: Data, id: String = newId()): Data {
     require(incoming.assets.size == 1)
-    val old = incoming.assets.single(); val id = newId()
+    val old = incoming.assets.single()
     return mergePackage(current.copy(assets = current.assets + old.copy(id = id, name = "${old.name} (Import)", parentId = "", favorite = false, lastOpened = 0)), incoming, id, false)
 }

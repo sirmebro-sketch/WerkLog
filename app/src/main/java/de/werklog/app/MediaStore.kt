@@ -56,19 +56,22 @@ class LocalRepository(private val root: File) {
         ImageCipher.decrypt(imageFile(active() ?: error("Bildablage fehlt"), ref).readBounded(MAX_IMAGE_BYTES + 28), key, ref)
     }
     private fun persist(dir: File, data: Data, key: ByteArray, salt: ByteArray): Data {
-        validateImages(data)
-        validateWork(data.work, data.assets.map { it.id }.toSet())
+        validateData(data)
+        val created = mutableListOf<File>(); var committed = false
+        try {
         val normalized = mapImages(data) { image ->
             when { image.isEmpty() -> ""; isImageRef(image) -> { require(imageFile(dir, image).isFile); image }; else -> {
                 val ref = "img:" + newId(); val raw = Base64.getDecoder().decode(image)
+                created.add(imageFile(dir, ref))
                 try { atomicWrite(imageFile(dir, ref), ImageCipher.encrypt(raw, key, ref)) } finally { raw.fill(0) }; ref
             } }
         }
         val raw = encode(normalized)
-        try { decode(raw); atomicWrite(File(dir, "data.vault"), Vault.encrypt(raw, key, salt)) } finally { raw.fill(0) }
+        try { decode(raw); atomicWrite(File(dir, "data.vault"), Vault.encrypt(raw, key, salt)); committed = true } finally { raw.fill(0) }
         val used = imageValues(normalized).filter(::isImageRef).map { it.substring(4) + ".image" }.toSet()
-        dir.listFiles()?.filter { it.extension == "image" && it.name !in used }?.forEach { it.delete() }
+        runCatching { dir.listFiles()?.filter { it.extension == "image" && it.name !in used }?.forEach { it.delete() } }
         return normalized
+        } catch (e: Exception) { if (!committed) created.forEach { it.delete() }; throw e }
     }
     @Synchronized fun save(data: Data, key: ByteArray, salt: ByteArray): Data {
         val current = active()
@@ -80,8 +83,10 @@ class LocalRepository(private val root: File) {
     private fun activate(dir: File) {
         atomicWrite(pointer, dir.name.toByteArray())
         // Old generations are only deleted after the new pointer is durable.
-        root.listFiles()?.filter { it.isDirectory && it.name.startsWith("store-") && it != dir }?.forEach { it.deleteRecursively() }
-        legacy.delete()
+        runCatching {
+            root.listFiles()?.filter { it.isDirectory && it.name.startsWith("store-") && it != dir }?.forEach { it.deleteRecursively() }
+            legacy.delete()
+        }
     }
     @Synchronized fun export(out: OutputStream) {
         val dir = active()
@@ -134,6 +139,13 @@ class LocalRepository(private val root: File) {
             }
             val result = persist(dir, data, key, salt); activate(dir); return Triple(salt, key, result)
         } catch (e: Exception) { dir.deleteRecursively(); key.fill(0); throw e }
+    }
+    @Synchronized fun discardUnreferenced(key: ByteArray) {
+        val dir = active() ?: return
+        val raw = Vault.decrypt(envelope(), key)
+        val data = try { decode(raw) } finally { raw.fill(0) }
+        val used = imageValues(data).filter(::isImageRef).map { it.substring(4) + ".image" }.toSet()
+        dir.listFiles()?.filter { it.extension == "image" && it.name !in used }?.forEach { it.delete() }
     }
     @Synchronized fun bytesUsed(): Long = active()?.walkTopDown()?.filter { it.isFile }?.sumOf { it.length() } ?: legacy.length()
 }

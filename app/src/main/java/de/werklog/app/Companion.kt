@@ -9,8 +9,11 @@ val orderStatuses = listOf("Entwurf", "Angefragt", "Bestellt", "Teilgeliefert", 
 fun occurrences(event: Appointment, from: LocalDate, to: LocalDate): List<Appointment> {
     val start = appointmentTime(event.start) ?: return emptyList()
     if (event.repeat == "Nie" || event.status != "Geplant") return if (start.toLocalDate() in from..to) listOf(event) else emptyList()
-    val result = mutableListOf<Appointment>(); var n = 0L
-    while (n < 40000) {
+    if (to.isBefore(from)) return emptyList()
+    val unit = when (event.repeat) { "Täglich" -> java.time.temporal.ChronoUnit.DAYS; "Wöchentlich" -> java.time.temporal.ChronoUnit.WEEKS; "Monatlich" -> java.time.temporal.ChronoUnit.MONTHS; else -> java.time.temporal.ChronoUnit.YEARS }
+    val result = mutableListOf<Appointment>(); var n = (unit.between(start.toLocalDate(), from) - 1).coerceAtLeast(0)
+    var examined = 0
+    while (examined++ < 40000) {
         val next = when (event.repeat) { "Täglich" -> start.plusDays(n); "Wöchentlich" -> start.plusWeeks(n); "Monatlich" -> start.plusMonths(n); "Jährlich" -> start.plusYears(n); else -> start }
         if (next.toLocalDate() > to) break
         if (next.toLocalDate() >= from) result += event.copy(start = formatAppointment(next))

@@ -45,6 +45,15 @@ class NavigationTest {
             ui.onNodeWithContentDescription("Anlagenakte öffnen").performScrollTo().performClick()
             ui.onNodeWithText("Anlageninformationen bearbeiten").performScrollTo().performClick()
             ui.onNodeWithText("Anlagenname *").performTextReplacement("Prüfanlage geändert")
+            // A real disk-write failure must keep the editor and its entered text.
+            val activeDir = File(context.filesDir, File(context.filesDir, "active").readText())
+            val blockedWrite = File(activeDir, "data.vault.tmp").apply { mkdir() }
+            ui.onNodeWithText("Speichern").performClick()
+            ui.waitUntil(15000) { ui.onAllNodesWithText("Verstanden").fetchSemanticsNodes().isNotEmpty() }
+            ui.onNodeWithText("Verstanden").performClick()
+            ui.onNodeWithText("Prüfanlage geändert", substring = false).assertExists()
+            org.junit.Assert.assertEquals("Prüfanlage", diagnosticModel.data!!.assets.single().name)
+            blockedWrite.delete()
             ui.onNodeWithText("Speichern").performClick()
             ui.waitUntil(10000) { ui.onAllNodesWithText("Prüfanlage geändert").fetchSemanticsNodes().isNotEmpty() }
             ui.onNodeWithText("Einstellung", useUnmergedTree = true).performClick()
@@ -175,6 +184,23 @@ class NavigationTest {
             ui.onRoot().captureToImage().asAndroidBitmap().let { bitmap ->
                 File(requireNotNull(InstrumentationRegistry.getArguments().getString("additionalTestOutputDir")), "kontakte.png").outputStream().use { bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it) }
             }
+            // Import a colleague package through the production ViewModel, including a cover image.
+            val imageBytes = java.io.ByteArrayOutputStream().also { out ->
+                val bitmap = android.graphics.Bitmap.createBitmap(100, 100, android.graphics.Bitmap.Config.ARGB_8888)
+                bitmap.eraseColor(android.graphics.Color.GREEN); bitmap.compress(android.graphics.Bitmap.CompressFormat.JPEG, 80, out); bitmap.recycle()
+            }.toByteArray()
+            val sourceAsset = Asset(name = "Freigabe Testanlage", trade = "Wasser", location = "Test", note = "", coverImage = java.util.Base64.getEncoder().encodeToString(imageBytes))
+            val source = Data(assets = listOf(sourceAsset))
+            val sharedFile = File(context.cacheDir, "test-cover.werkshare"); val shareCode = Exchange.newCode()
+            kotlinx.coroutines.runBlocking { ShareArchive.create(source, shareCode, { error("Inline fixture") }, sharedFile, context.cacheDir) }
+            val opened = ShareArchive.open(sharedFile, shareCode, context.cacheDir)
+            scenario.onActivity { scenarioModel.importShare(opened, null, false) }
+            ui.waitUntil(30000) { !scenarioModel.busy && scenarioModel.data!!.assets.size == 2 }
+            val imported = scenarioModel.data!!.assets.single { it.name.startsWith("Freigabe Testanlage") }
+            org.junit.Assert.assertTrue(isImageRef(imported.coverImage))
+            val importedBytes = kotlinx.coroutines.runBlocking { scenarioModel.image(imported.coverImage) }
+            org.junit.Assert.assertArrayEquals(imageBytes, importedBytes)
+            sharedFile.delete()
             } catch (failure: Throwable) {
                 println("TEST DIAGNOSTIC busy=${diagnosticModel.busy} unlocked=${diagnosticModel.data != null} exists=${diagnosticModel.exists} error=${diagnosticModel.error} page=${diagnosticModel.workspacePage.intValue}")
                 runCatching { println(ui.onRoot().printToString()) }

@@ -14,7 +14,7 @@ import java.time.YearMonth
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 
-@Composable internal fun WorkTools(mode: String, data: Data, busy: Boolean, back: () -> Unit, save: (Data) -> Unit, photo: (PhotoTarget) -> Unit, mailOrder: (PartsOrder) -> Unit, initialId: String? = null, consumed: () -> Unit = {}) {
+@Composable internal fun WorkTools(mode: String, data: Data, busy: Boolean, back: () -> Unit, save: DataSaver, photo: (PhotoTarget) -> Unit, mailOrder: (PartsOrder) -> Unit, initialId: String? = null, consumed: () -> Unit = {}) {
     TextButton(onClick = back) { Text("‹ Zurück") }
     when (mode) {
         "Zähler" -> MeterScreen(data, busy, save, photo)
@@ -25,7 +25,7 @@ import java.util.Locale
         "Textvorlagen" -> TemplateScreen(data, busy, save)
     }
 }
-@Composable private fun MeterScreen(d: Data, busy: Boolean, save: (Data) -> Unit, photo: (PhotoTarget) -> Unit) {
+@Composable private fun MeterScreen(d: Data, busy: Boolean, save: DataSaver, photo: (PhotoTarget) -> Unit) {
     var edit by rememberSaveable { mutableStateOf(false) }; var selected by rememberSaveable { mutableStateOf<Meter?>(null) }
     var remove by rememberSaveable { mutableStateOf<Meter?>(null) }
     var reading by rememberSaveable { mutableStateOf<Meter?>(null) }
@@ -47,32 +47,33 @@ import java.util.Locale
         history.take(5).forEach { Text("${stamp(it.created)} · ${it.value} ${it.unit}", color = Muted, fontSize = 12.sp) }
     } }
     remove?.let { m -> ConfirmRemoval("Zähler löschen?", "Die Ablesungen bleiben als Messwerte im Arbeitsprotokoll erhalten; die Zählerzuordnung entfällt.", busy, { remove = null }) {
-        save(d.copy(readings = d.readings.map { if (it.meterId == m.id) it.copy(meterId = "") else it }, work = d.work.copy(meters = d.work.meters.filterNot { it.id == m.id })))
+        save(d.copy(readings = d.readings.map { if (it.meterId == m.id) it.copy(meterId = "") else it }, work = d.work.copy(meters = d.work.meters.filterNot { it.id == m.id }))) { remove = null }
     } }
-    if (edit) MeterEditor(selected, d, { edit = false }) { meter -> save(d.copy(work = d.work.copy(meters = d.work.meters.filterNot { it.id == meter.id } + meter))); edit = false }
-    reading?.let { m -> var value by rememberSaveable { mutableStateOf("") }; var note by rememberSaveable { mutableStateOf("") }
+    if (edit) MeterEditor(selected, d, { edit = false }) { meter -> save(d.copy(work = d.work.copy(meters = d.work.meters.filterNot { it.id == meter.id } + meter))) { edit = false } }
+    reading?.let { m -> val recordId = rememberSaveable { newId() }; var value by rememberSaveable { mutableStateOf("") }; var note by rememberSaveable { mutableStateOf("") }
         var reset by rememberSaveable { mutableStateOf(false) }; var acknowledge by rememberSaveable { mutableStateOf(false) }
         val previous = d.readings.filter { it.meterId == m.id }.maxByOrNull { it.created }
         val warning = number(value)?.let { meterWarning(m, previous, it, reset) }
         Form(m.name, number(value)?.let { it >= 0 } == true && !busy && (warning == null || acknowledge) && (!reset || note.isNotBlank()), { reading = null }, {
-            save(d.copy(readings = d.readings + Reading(assetId = m.assetId, label = m.name, value = number(value)!!, unit = m.unit, note = note, meterId = m.id, reset = reset), work = d.work.copy(lastMeter = m.id))); reading = null
+            save(d.copy(readings = d.readings.filterNot { it.id == recordId } + Reading(id = recordId, assetId = m.assetId, label = m.name, value = number(value)!!, unit = m.unit, note = note, meterId = m.id, reset = reset), work = d.work.copy(lastMeter = m.id))) { reading = null }
         }) { Text("${assetName(d, m.assetId)} · ${m.unit}"); previous?.let { Text("Vorher: ${it.value} ${it.unit}") }
             Field(value, { value = it; acknowledge = false }, "Zählerstand", numeric = true)
-            Row { Checkbox(reset, { reset = it; acknowledge = false }); Text("Zählerwechsel / neuer Ausgangsstand") }
+            Row { Checkbox(reset, { reset = it; acknowledge = false }, enabled = !busy); Text("Zählerwechsel / neuer Ausgangsstand") }
             Field(note, { note = it }, if (reset) "Grund / neue Zählernummer *" else "Hinweis", 2)
-            warning?.let { Text(it, color = Amber); Row { Checkbox(acknowledge, { acknowledge = it }); Text("Wert geprüft, trotzdem speichern") } } }
+            warning?.let { Text(it, color = Amber); Row { Checkbox(acknowledge, { acknowledge = it }, enabled = !busy); Text("Wert geprüft, trotzdem speichern") } } }
     }
 }
 @Composable private fun MeterEditor(old: Meter?, d: Data, close: () -> Unit, save: (Meter) -> Unit) {
+    val recordId = rememberSaveable { old?.id ?: newId() }
     var asset by rememberSaveable { mutableStateOf(old?.assetId ?: d.assets.firstOrNull()?.id.orEmpty()) }; var name by rememberSaveable { mutableStateOf(old?.name ?: "") }
     var unit by rememberSaveable { mutableStateOf(old?.unit ?: "kWh") }; var note by rememberSaveable { mutableStateOf(old?.note ?: "") }
     var limit by rememberSaveable { mutableStateOf(old?.maxDelta?.toString() ?: "") }
-    Form("Zähler", (limit.isBlank() || number(limit)?.let { it > 0 } == true) && asset.isNotEmpty() && name.isNotBlank() && unit.isNotBlank(), close, { save(Meter(old?.id ?: newId(), asset, name.trim(), unit.trim(), note.trim(), number(limit))) }) {
+    Form("Zähler", (limit.isBlank() || number(limit)?.let { it > 0 } == true) && asset.isNotEmpty() && name.isNotBlank() && unit.isNotBlank(), close, { save(Meter(recordId, asset, name.trim(), unit.trim(), note.trim(), number(limit))) }) {
         if (old == null) Picker("Anlage", d.assets.map { it.id to it.name }, asset) { asset = it } else Text("Anlage: ${assetName(d, asset)}")
         Field(name, { name = it }, "Zählername / Nummer *"); Field(unit, { unit = it }, "Einheit *"); Field(note, { note = it }, "Hinweise / Nachkommastellen", 3); Field(limit, { limit = it }, "Eigene Prüfgrenze: Differenz pro Ablesung (optional)", numeric = true)
     }
 }
-@Composable private fun CalendarScreen(d: Data, busy: Boolean, save: (Data) -> Unit) {
+@Composable private fun CalendarScreen(d: Data, busy: Boolean, save: DataSaver) {
     var month by rememberSaveable { mutableStateOf(YearMonth.now()) }; var day by rememberSaveable { mutableStateOf(LocalDate.now()) }
     var all by rememberSaveable { mutableStateOf(false) }; var editing by rememberSaveable { mutableStateOf(false) }; var selected by rememberSaveable { mutableStateOf<Appointment?>(null) }
     val context = androidx.compose.ui.platform.LocalContext.current
@@ -117,17 +118,18 @@ import java.util.Locale
         TextButton(onClick = { selected = d.work.appointments.single { it.id == event.id }; editing = true }, enabled = !busy) { Text("Termin bearbeiten") }; TextButton(onClick = { remove = event }, enabled = !busy) { Text("Termin / Serie löschen") }
     } }
     Hint("Systemkalender-Kopien können je nach Kalenderkonto synchronisiert werden; keine automatische Übertragung. Wiederholungen werden für die nächsten 6 Monate angezeigt. Bearbeiten ändert die gesamte Serie. Erinnerungen sind lokal und können durch Android verzögert werden.")
-    remove?.let { event -> ConfirmRemoval("Termin / Serie löschen?", "Alle Wiederholungen dieses Termins werden entfernt. Kopien im Systemkalender bleiben unverändert.", busy, { remove = null }) { save(d.copy(work = d.work.copy(appointments = d.work.appointments.filterNot { it.id == event.id }))) } }
-    if (editing) AppointmentEditor(selected, day, d, { editing = false }) { e -> save(d.copy(work = d.work.copy(appointments = d.work.appointments.filterNot { it.id == e.id } + e))); editing = false }
+    remove?.let { event -> ConfirmRemoval("Termin / Serie löschen?", "Alle Wiederholungen dieses Termins werden entfernt. Kopien im Systemkalender bleiben unverändert.", busy, { remove = null }) { save(d.copy(work = d.work.copy(appointments = d.work.appointments.filterNot { it.id == event.id }))) { remove = null } } }
+    if (editing) AppointmentEditor(selected, day, d, { editing = false }) { e -> save(d.copy(work = d.work.copy(appointments = d.work.appointments.filterNot { it.id == e.id } + e))) { editing = false } }
 }
 @Composable private fun AppointmentEditor(old: Appointment?, date: LocalDate, d: Data, close: () -> Unit, save: (Appointment) -> Unit) {
+    val recordId = rememberSaveable { old?.id ?: newId() }
     var title by rememberSaveable { mutableStateOf(old?.title ?: "") }; var start by rememberSaveable { mutableStateOf(old?.start ?: formatAppointment(date.atTime(8, 0))) }
     var minutes by rememberSaveable { mutableStateOf((old?.minutes ?: 60).toString()) }; var company by rememberSaveable { mutableStateOf(old?.company ?: "") }
     var contact by rememberSaveable { mutableStateOf(old?.contact ?: "") }; var person by rememberSaveable { mutableStateOf(old?.responsible ?: "") }
     var asset by rememberSaveable { mutableStateOf(old?.assetId ?: "") }; var note by rememberSaveable { mutableStateOf(old?.note ?: "") }; var status by rememberSaveable { mutableStateOf(old?.status ?: "Geplant") }
     var repeat by rememberSaveable { mutableStateOf(old?.repeat ?: "Nie") }; var remind by rememberSaveable { mutableIntStateOf(old?.remind ?: -1) }
     Form("Termin", title.isNotBlank() && appointmentTime(start) != null && minutes.toIntOrNull()?.let { it in 1..10080 } == true, close, {
-        save(Appointment(old?.id ?: newId(), title.trim(), start.trim(), minutes.toInt(), company.trim(), contact.trim(), person.trim(), asset, note.trim(), status, repeat, remind))
+        save(Appointment(recordId, title.trim(), start.trim(), minutes.toInt(), company.trim(), contact.trim(), person.trim(), asset, note.trim(), status, repeat, remind))
     }) { Field(title, { title = it }, "Grund / Arbeit *"); Field(start, { start = it }, "Datum und Uhrzeit (TT.MM.JJJJ HH:MM)"); Field(minutes, { minutes = it }, "Dauer in Minuten", numeric = true)
         Field(company, { company = it }, "Fremdfirma"); Field(contact, { contact = it }, "Ansprechpartner / Kontakt"); Field(person, { person = it }, "Zuständiger Mitarbeiter")
         Picker("Anlage", listOf("" to "Ohne Anlage") + d.assets.map { it.id to it.name }, asset) { asset = it }; Field(note, { note = it }, "Vorbereitung / Hinweise", 3)
@@ -139,7 +141,7 @@ import java.util.Locale
 
 val LocalGuideStepAction = staticCompositionLocalOf<((() -> Unit)?) -> Unit> { {} }
 
-@Composable private fun GuideScreen(d: Data, busy: Boolean, save: (Data) -> Unit, photo: (PhotoTarget) -> Unit, initialId: String?, consumed: () -> Unit) {
+@Composable private fun GuideScreen(d: Data, busy: Boolean, save: DataSaver, photo: (PhotoTarget) -> Unit, initialId: String?, consumed: () -> Unit) {
     var selected by rememberSaveable { mutableStateOf<String?>(null) }; var editor by rememberSaveable { mutableStateOf(false) }
     LaunchedEffect(initialId) { if (initialId != null) { selected = initialId; consumed() } }
     var stepEditor by rememberSaveable { mutableStateOf(false) }; var selectedStep by rememberSaveable { mutableStateOf<GuideStep?>(null) }
@@ -151,16 +153,19 @@ val LocalGuideStepAction = staticCompositionLocalOf<((() -> Unit)?) -> Unit> { {
         setNextAction(if (guide != null && guide.steps.size < 100) ({ selectedStep = null; stepEditor = true }) else null)
         onDispose { setNextAction(null) }
     }
-    fun update(next: Guide) {
+    fun update(next: Guide, done: () -> Unit = {}) {
         val previous = d.work.guides.find { it.id == next.id }
         val contentChanged = previous != null && (previous.title != next.title || previous.steps != next.steps || previous.assetId != next.assetId)
-        save(d.copy(work = d.work.copy(guides = d.work.guides.filterNot { it.id == next.id } + next.copy(revision = (previous?.revision ?: 0) + 1, checked = if (contentChanged) "" else next.checked))))
+        save(d.copy(work = d.work.copy(guides = d.work.guides.filterNot { it.id == next.id } + next.copy(revision = (previous?.revision ?: 0) + 1, checked = if (contentChanged) "" else next.checked))), done)
     }
+    var query by rememberSaveable { mutableStateOf("") }
     Section("Eigene Anleitungen")
     if (guide == null) {
         Hint("Schrittfolgen für wiederkehrende Arbeiten, optional einer Anlage zugeordnet. Eigene Notizen ersetzen keine freigegebenen Betriebsanweisungen.")
         Button(onClick = { selected = null; editor = true }, enabled = !busy) { Text("+ Anleitung") }
-        d.work.guides.forEach { g -> Panel {
+        Field(query, { query = it }, "Anleitungen suchen")
+        val results = d.work.guides.filter { g -> listOf(g.title, assetName(d, g.assetId)) .any { it.contains(query, true) } || g.steps.any { "${it.title} ${it.body}".contains(query, true) } }.sortedBy { it.title.lowercase() }
+        PagedRecords(results, query, { it.id }) { g -> Panel {
             Text(g.title, fontSize = 21.sp, fontWeight = FontWeight.Bold); Text(if (g.assetId.isBlank()) "Allgemeine Anleitung" else assetName(d, g.assetId), color = Mint)
             Text("${g.steps.size} Schritte"); TextButton(onClick = { selected = g.id }) { Text("Anleitung öffnen") }
         } }
@@ -184,37 +189,43 @@ val LocalGuideStepAction = staticCompositionLocalOf<((() -> Unit)?) -> Unit> { {
         if (guide.steps.isEmpty()) Hint("Füge oben den ersten Arbeitsschritt hinzu.")
         Hint("Bilder: max. 512 KiB pro Bild, insgesamt höchstens 500 Bilder für Anlagen, Anleitungen und Bestelllisten. Fotos erst nach dem Speichern des Schritts hinzufügen.")
     }
-    if (deleteGuide && guide != null) ConfirmRemoval("Anleitung löschen?", "Alle Schritte und Bilder dieser Anleitung werden entfernt.", busy, { deleteGuide = false }) { save(d.copy(entries = d.entries.map { it.copy(guideIds = it.guideIds - guide.id) }, work = d.work.copy(guides = d.work.guides.filterNot { it.id == guide.id }))); selected = null }
+    if (deleteGuide && guide != null) ConfirmRemoval("Anleitung löschen?", "Alle Schritte und Bilder dieser Anleitung werden entfernt.", busy, { deleteGuide = false }) { save(d.copy(entries = d.entries.map { it.copy(guideIds = it.guideIds - guide.id) }, work = d.work.copy(guides = d.work.guides.filterNot { it.id == guide.id }))) { selected = null; deleteGuide = false } }
     if (editor) {
+        val recordId = rememberSaveable { guide?.id ?: newId() }
         var title by rememberSaveable { mutableStateOf(guide?.title ?: "") }; var asset by rememberSaveable { mutableStateOf(guide?.assetId ?: "") }
-        Form("Anleitung", title.isNotBlank(), { editor = false }, { val next = (guide ?: Guide(title = title.trim())).copy(title = title.trim(), assetId = asset); update(next); selected = next.id; editor = false }) {
+        Form("Anleitung", title.isNotBlank(), { editor = false }, { val next = (guide ?: Guide(id = recordId, title = title.trim())).copy(title = title.trim(), assetId = asset); update(next) { selected = next.id; editor = false } }) {
             Field(title, { title = it }, "Titel *"); Picker("Anlage", listOf("" to "Allgemein / ohne Anlage") + d.assets.map { it.id to it.name }, asset) { asset = it }
         }
     }
     if (stepEditor && guide != null) {
+        val recordId = rememberSaveable { selectedStep?.id ?: newId() }
         var title by rememberSaveable { mutableStateOf(selectedStep?.title ?: "") }; var body by rememberSaveable { mutableStateOf(selectedStep?.body ?: "") }
         Form("Arbeitsschritt", title.isNotBlank(), { stepEditor = false }, {
-            val next = GuideStep(selectedStep?.id ?: newId(), title.trim(), body.trim(), selectedStep?.image ?: "")
-            update(guide.copy(steps = if (selectedStep == null) guide.steps + next else guide.steps.map { if (it.id == next.id) next else it })); stepEditor = false
+            val next = GuideStep(recordId, title.trim(), body.trim(), selectedStep?.image ?: "")
+            update(guide.copy(steps = if (guide.steps.none { it.id == next.id }) guide.steps + next else guide.steps.map { if (it.id == next.id) next else it })) { stepEditor = false }
         }) { Field(title, { title = it }, "Schritt *"); Field(body, { body = it }, "Beschreibung / Voraussetzungen / Kontrolle", 6) }
     }
     deletion?.let { step -> AlertDialog(onDismissRequest = { deletion = null }, title = { Text("Schritt löschen?") }, text = { Text("${step.title} samt Bild wird aus der Anleitung entfernt.") },
-        confirmButton = { TextButton(onClick = { guide?.let { update(it.copy(steps = it.steps.filterNot { x -> x.id == step.id })) }; deletion = null }, enabled = !busy) { Text("Löschen") } },
+        confirmButton = { TextButton(onClick = { guide?.let { update(it.copy(steps = it.steps.filterNot { x -> x.id == step.id })) { deletion = null } } }, enabled = !busy) { Text("Löschen") } },
         dismissButton = { TextButton(onClick = { deletion = null }) { Text("Abbrechen") } }) }
 }
 
-@Composable private fun OrderScreen(d: Data, busy: Boolean, save: (Data) -> Unit, photo: (PhotoTarget) -> Unit, mail: (PartsOrder) -> Unit, initialId: String?, consumed: () -> Unit) {
+@Composable private fun OrderScreen(d: Data, busy: Boolean, save: DataSaver, photo: (PhotoTarget) -> Unit, mail: (PartsOrder) -> Unit, initialId: String?, consumed: () -> Unit) {
     var selected by rememberSaveable { mutableStateOf<String?>(null) }; var editor by rememberSaveable { mutableStateOf(false) }
     LaunchedEffect(initialId) { if (initialId != null) { selected = initialId; consumed() } }
     var itemEditor by rememberSaveable { mutableStateOf(false) }; var selectedItem by rememberSaveable { mutableStateOf<OrderItem?>(null) }
     var preview by rememberSaveable { mutableStateOf(false) }; var deletion by rememberSaveable { mutableStateOf<OrderItem?>(null) }
     var deleteOrder by rememberSaveable { mutableStateOf(false) }
     val order = d.work.orders.find { it.id == selected }
-    fun update(next: PartsOrder) = save(d.copy(work = d.work.copy(orders = d.work.orders.filterNot { it.id == next.id } + next)))
+    fun update(next: PartsOrder, done: () -> Unit = {}) = save(d.copy(work = d.work.copy(orders = d.work.orders.filterNot { it.id == next.id } + next)), done)
+    var query by rememberSaveable { mutableStateOf("") }; var statusFilter by rememberSaveable { mutableStateOf("Offen") }
     Section("Bestelllisten")
     if (order == null) {
         Button(onClick = { selected = null; editor = true }, enabled = !busy) { Text("+ Bestellliste") }
-        d.work.orders.forEach { o -> Panel { Text(o.title, fontSize = 22.sp, fontWeight = FontWeight.Bold); Text("${o.items.size} Positionen · ${o.status}", color = Mint)
+        Field(query, { query = it }, "Bestellungen, Artikel oder Anlagen suchen")
+        Choices(listOf("Offen", "Alle", "Erledigt"), statusFilter) { statusFilter = it }
+        val results = d.work.orders.filter { o -> (statusFilter == "Alle" || (statusFilter == "Erledigt") == (o.status in listOf("Geliefert", "Abgesagt"))) && ("${o.title} ${o.context} ${assetName(d, o.assetId)}".contains(query, true) || o.items.any { "${it.name} ${it.reason} ${assetName(d, it.assetId)}".contains(query, true) }) }.reversed()
+        PagedRecords(results, "$query:$statusFilter", { it.id }) { o -> Panel { Text(o.title, fontSize = 22.sp, fontWeight = FontWeight.Bold); Text("${o.items.size} Positionen · ${o.status}", color = Mint)
             TextButton(onClick = { selected = o.id }) { Text("Öffnen / weiter erfassen") } } }
     } else {
         TextButton(onClick = { selected = null }) { Text("‹ Alle Bestelllisten") }; Text(order.title, fontSize = 24.sp, fontWeight = FontWeight.Bold)
@@ -240,13 +251,14 @@ val LocalGuideStepAction = staticCompositionLocalOf<((() -> Unit)?) -> Unit> { {
         if (order.delivery.isNotBlank()) Text("Lieferdatum: ${order.delivery}")
         Hint("Die Anlagenzuordnung bleibt lokal. Nur Bezeichnung, Menge, Zweck und hinzugefügte Bilder werden übergeben. Versand erfolgt ausschließlich durch dich in der Mail-App.")
     }
-    if (deleteOrder && order != null) ConfirmRemoval("Bestellliste löschen?", "Alle Positionen und Bilder dieser lokalen Liste werden entfernt. Bereits versandte E-Mails bleiben unverändert.", busy, { deleteOrder = false }) { save(d.copy(work = d.work.copy(orders = d.work.orders.filterNot { it.id == order.id }))); selected = null }
+    if (deleteOrder && order != null) ConfirmRemoval("Bestellliste löschen?", "Alle Positionen und Bilder dieser lokalen Liste werden entfernt. Bereits versandte E-Mails bleiben unverändert.", busy, { deleteOrder = false }) { save(d.copy(work = d.work.copy(orders = d.work.orders.filterNot { it.id == order.id }))) { selected = null; deleteOrder = false } }
     if (editor) {
+        val recordId = rememberSaveable { order?.id ?: newId() }
         var title by rememberSaveable { mutableStateOf(order?.title ?: "") }; var recipient by rememberSaveable { mutableStateOf(order?.recipient ?: "") }; var delivery by rememberSaveable { mutableStateOf(order?.delivery ?: "") }
         var asset by rememberSaveable { mutableStateOf(order?.assetId ?: "") }; var entry by rememberSaveable { mutableStateOf(order?.entryId ?: "") }; var context by rememberSaveable { mutableStateOf(order?.context ?: "") }
         Form("Bestellliste", (delivery.isBlank() || parseServiceDate(delivery) != null) && title.isNotBlank() && (recipient.isBlank() || (recipient.contains('@') && !recipient.contains('\n'))), { editor = false }, {
-            val next = (order ?: PartsOrder(title = title.trim())).copy(title = title.trim(), recipient = recipient.trim(), delivery = delivery.trim(), assetId = asset, entryId = entry, context = context.trim())
-            update(next); selected = next.id; editor = false
+            val next = (order ?: PartsOrder(id = recordId, title = title.trim())).copy(title = title.trim(), recipient = recipient.trim(), delivery = delivery.trim(), assetId = asset, entryId = entry, context = context.trim())
+            update(next) { selected = next.id; editor = false }
         }) {
             Picker("Anlage (nur lokal)", listOf("" to "Ohne Anlage") + d.assets.map { it.id to it.name }, asset) { asset = it; if (d.entries.find { e -> e.id == entry }?.assetId != asset) entry = "" }
             Picker("Störung / Arbeit (nur lokal)", listOf("" to "Ohne Vorgang") + d.entries.filter { asset.isBlank() || it.assetId == asset }.map { it.id to it.title }, entry) { entry = it; d.entries.find { e -> e.id == it }?.let { e -> asset = e.assetId } }
@@ -254,11 +266,12 @@ val LocalGuideStepAction = staticCompositionLocalOf<((() -> Unit)?) -> Unit> { {
             Field(title, { title = it }, "Titel *"); Field(recipient, { recipient = it }, "E-Mail Teamleiter (optional)"); Field(delivery, { delivery = it }, "Lieferdatum (TT.MM.JJJJ, optional)"); Hint("Leer lassen, wenn du den Empfänger erst in der E-Mail-App auswählen möchtest.") }
     }
     if (itemEditor && order != null) {
+        val recordId = rememberSaveable { selectedItem?.id ?: newId() }
         var name by rememberSaveable { mutableStateOf(selectedItem?.name ?: "") }; var quantity by rememberSaveable { mutableStateOf(selectedItem?.quantity ?: "1") }
         var unit by rememberSaveable { mutableStateOf(selectedItem?.unit ?: "Stück") }; var reason by rememberSaveable { mutableStateOf(selectedItem?.reason ?: "") }; var asset by rememberSaveable { mutableStateOf(selectedItem?.assetId ?: order.assetId) }
         Form("Bestellposition", name.isNotBlank() && unit.isNotBlank() && number(quantity)?.let { it > 0 } == true, { itemEditor = false }, {
-            val next = OrderItem(selectedItem?.id ?: newId(), name.trim(), quantity.trim(), unit.trim(), reason.trim(), asset, selectedItem?.image ?: "")
-            update(order.copy(items = if (selectedItem == null) order.items + next else order.items.map { if (it.id == next.id) next else it })); itemEditor = false
+            val next = OrderItem(recordId, name.trim(), quantity.trim(), unit.trim(), reason.trim(), asset, selectedItem?.image ?: "")
+            update(order.copy(items = if (order.items.none { it.id == next.id }) order.items + next else order.items.map { if (it.id == next.id) next else it })) { itemEditor = false }
         }) {
             if (selectedItem == null) Picker("Vorhandenes Teil übernehmen", d.work.orders.flatMap { it.items }.distinctBy { it.name }.map { it.id to it.name }, "") { id -> d.work.orders.flatMap { it.items }.find { it.id == id }?.let { name = it.name; unit = it.unit; reason = it.reason; asset = it.assetId } }
             Field(name, { name = it }, "Teil / Ausrüstung / Artikelnummer *"); Field(quantity, { quantity = it }, "Menge *", numeric = true); Field(unit, { unit = it }, "Einheit *")
@@ -271,6 +284,6 @@ val LocalGuideStepAction = staticCompositionLocalOf<((() -> Unit)?) -> Unit> { {
         Text(orderText(order))
     }
     deletion?.let { item -> AlertDialog(onDismissRequest = { deletion = null }, title = { Text("Position entfernen?") }, text = { Text(item.name) },
-        confirmButton = { TextButton(onClick = { order?.let { update(it.copy(items = it.items.filterNot { x -> x.id == item.id })) }; deletion = null }, enabled = !busy) { Text("Entfernen") } },
+        confirmButton = { TextButton(onClick = { order?.let { update(it.copy(items = it.items.filterNot { x -> x.id == item.id })) { deletion = null } } }, enabled = !busy) { Text("Entfernen") } },
         dismissButton = { TextButton(onClick = { deletion = null }) { Text("Abbrechen") } }) }
 }
