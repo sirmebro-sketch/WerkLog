@@ -14,10 +14,9 @@ import org.junit.Test
 /** Production settings, system bars, persistence and an unfinished form across color changes/lock. */
 class ThemeSelectionTest {
     @get:Rule val ui = createEmptyComposeRule()
-    private fun screenshot(name: String, expected: WerkTheme? = null) {
+    private fun screenshot(name: String, expected: WerkTheme? = null, dialog: Boolean = false) {
         ui.waitForIdle()
-        val roots = ui.onAllNodes(isRoot())
-        val bitmap = roots[roots.fetchSemanticsNodes().lastIndex].captureToImage().asAndroidBitmap()
+        val bitmap = ui.onNode(if (dialog) isDialog() else isRoot()).assertIsDisplayed().captureToImage().asAndroidBitmap()
         if (expected != null) assertEquals("Actual app background: ${expected.title}", expected.palette.background.toInt(), bitmap.getPixel(2, 2))
         val folder = File(requireNotNull(InstrumentationRegistry.getArguments().getString("additionalTestOutputDir")))
         File(folder, name).apply { parentFile?.mkdirs() }.outputStream().use { bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it) }
@@ -58,7 +57,7 @@ class ThemeSelectionTest {
             ui.onNodeWithText("Betrieb", useUnmergedTree = true).performClick()
             ui.onNodeWithText("Anlagen", substring = false).performClick()
             ui.onNodeWithText("+ Anlage anlegen").performClick()
-            screenshot("formular-tageslicht.png")
+            screenshot("formular-tageslicht.png", dialog = true)
             ui.onNodeWithText("Anlagenname *").performTextInput("Ungespeicherte Testanlage")
             scenario.onActivity { assertTrue(it.appearance.select(WerkTheme.STAHLBLAU)) }
             ui.onNodeWithText("Ungespeicherte Testanlage", substring = false).assertExists()
@@ -127,7 +126,7 @@ class ThemeSelectionTest {
             screenshot("anleitung-tageslicht.png", WerkTheme.TAGESLICHT)
             ui.onNodeWithText("Groß öffnen / vergrößern").performScrollTo().performClick()
             ui.onNodeWithContentDescription("Vergrößertes Bild").assertIsDisplayed()
-            screenshot("bildansicht-tageslicht.png")
+            screenshot("bildansicht-tageslicht.png", dialog = true)
             ui.onNodeWithText("Schließen").assertIsDisplayed().performClick()
         }
     }
