@@ -15,6 +15,7 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.compose.ui.window.SecureFlagPolicy
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -115,7 +116,7 @@ val LocalImageLoader = staticCompositionLocalOf<suspend (String) -> ByteArray> {
                         TextButton(onClick = { zoom = 1f; offset = Offset.Zero }) { Text("Zurücksetzen") }
                         TextButton(onClick = { fullScreen = false }) { Text("Schließen") }
                     }
-                    Box(Modifier.weight(1f).fillMaxWidth().pointerInput(Unit) {
+                    Box(Modifier.weight(1f).fillMaxWidth().clipToBounds().pointerInput(Unit) {
                         detectTransformGestures { _, pan, change, _ ->
                             zoom = (zoom * change).coerceIn(1f, 6f)
                             val limitX = size.width * (zoom - 1) / 2f
