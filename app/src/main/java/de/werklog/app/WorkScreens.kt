@@ -4,6 +4,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -33,16 +34,16 @@ import java.util.Locale
     Button(onClick = { selected = null; edit = true }, enabled = !busy && d.assets.isNotEmpty()) { Text("+ Zähler anlegen") }
     if (d.assets.isEmpty()) Hint("Bitte zuerst eine Anlage anlegen.")
     d.work.meters.sortedByDescending { it.id == d.work.lastMeter }.forEach { meter -> Panel {
-        Text(meter.name, fontSize = 21.sp, fontWeight = FontWeight.Bold); Text(assetName(d, meter.assetId), color = Mint)
+        Text(meter.name, fontSize = 21.sp, fontWeight = FontWeight.Bold); Text(assetName(d, meter.assetId), color = Muted)
         val history = d.readings.filter { it.meterId == meter.id }.sortedByDescending { it.created }
         history.firstOrNull()?.let { Text("Zuletzt: ${it.value} ${it.unit} · ${stamp(it.created)}") }
         if (meter.note.isNotBlank()) Text(meter.note)
         Row { TextButton(onClick = { photo(PhotoTarget("meter", meter.id)) }, enabled = !busy) { Text("Zähler fotografieren") }
             TextButton(onClick = { reading = meter }, enabled = !busy) { Text("Manuell") } }
-        TextButton(onClick = { selected = meter; edit = true }, enabled = !busy) { Text("Zähler bearbeiten") }; TextButton(onClick = { remove = meter }, enabled = !busy) { Text("Zähler löschen") }
+        TextButton(onClick = { selected = meter; edit = true }, enabled = !busy) { Text("Zähler bearbeiten") }; TextButton(onClick = { remove = meter }, enabled = !busy) { Text("Zähler löschen", color = MaterialTheme.colorScheme.error) }
         ReadingTrend(history)
         val delta = history.firstOrNull()?.let { readingDelta(it, history.getOrNull(1)) }
-        if (delta != null) Text("Seit letzter Ablesung: $delta ${meter.unit}", color = Mint)
+        if (delta != null) Text("Seit letzter Ablesung: $delta ${meter.unit}")
         history.take(5).forEach { Text("${stamp(it.created)} · ${it.value} ${it.unit}", color = Muted, fontSize = 12.sp) }
     } }
     remove?.let { m -> ConfirmRemoval("Zähler löschen?", "Die Ablesungen bleiben als Messwerte im Arbeitsprotokoll erhalten; die Zählerzuordnung entfällt.", busy, { remove = null }) {
@@ -59,7 +60,7 @@ import java.util.Locale
             Field(value, { value = it; acknowledge = false }, "Zählerstand", numeric = true)
             Row { Checkbox(reset, { reset = it; acknowledge = false }, enabled = !busy); Text("Zählerwechsel / neuer Ausgangsstand") }
             Field(note, { note = it }, if (reset) "Grund / neue Zählernummer *" else "Hinweis", 2)
-            warning?.let { Text(it, color = Amber); Row { Checkbox(acknowledge, { acknowledge = it }, enabled = !busy); Text("Wert geprüft, trotzdem speichern") } } }
+            warning?.let { Text(it, color = Warning); Row { Checkbox(acknowledge, { acknowledge = it }, enabled = !busy); Text("Wert geprüft, trotzdem speichern") } } }
     }
 }
 @Composable private fun MeterEditor(old: Meter?, d: Data, close: () -> Unit, save: (Meter) -> Unit) {
@@ -97,8 +98,10 @@ import java.util.Locale
         (0..6).forEach { index -> val number = week.getOrElse(index) { 0 }
             if (number == 0) Spacer(Modifier.weight(1f).height(48.dp)) else {
                 val date = month.atDay(number); val hasEvent = d.work.appointments.any { it.status == "Geplant" && occurrences(it, date, date).isNotEmpty() }
-                TextButton(onClick = { day = date; all = false }, modifier = Modifier.weight(1f).heightIn(min = 48.dp), contentPadding = PaddingValues(0.dp)) {
-                    Text("$number${if (hasEvent) "•" else ""}", color = if (date == day) Amber else Mint, fontWeight = if (date == day) FontWeight.Bold else FontWeight.Normal)
+                TextButton(onClick = { day = date; all = false }, modifier = Modifier.weight(1f).heightIn(min = 48.dp), contentPadding = PaddingValues(0.dp), colors = ButtonDefaults.textButtonColors(
+                    containerColor = if (date == day) MaterialTheme.colorScheme.primaryContainer else Color.Transparent,
+                    contentColor = if (date == day) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface)) {
+                    Text("$number${if (hasEvent) "•" else ""}", fontWeight = if (date == day) FontWeight.Bold else FontWeight.Normal)
                 }
             }
         }
@@ -108,7 +111,7 @@ import java.util.Locale
     val events = d.work.appointments.flatMap { occurrences(it, if (all) LocalDate.now() else day, if (all) LocalDate.now().plusMonths(6) else day) }.sortedBy { appointmentTime(it.start) }
     if (events.isEmpty()) Hint("Keine Termine für diese Auswahl.")
     PagedRecords(events, "$day:$all", { "${it.id}:${it.start}" }) { event -> Panel {
-        Text(event.title, fontSize = 20.sp, fontWeight = FontWeight.Bold); Text("${event.start} · ${event.minutes} min · ${event.status}", color = Mint)
+        Text(event.title, fontSize = 20.sp, fontWeight = FontWeight.Bold); Text("${event.start} · ${event.minutes} min", color = Muted); StatusBadge(event.status, appointmentTone(event.status))
         if (event.company.isNotBlank()) Text("Fremdfirma: ${event.company}")
         if (event.responsible.isNotBlank()) Text("Zuständig: ${event.responsible}")
         if (event.contact.isNotBlank()) Text("Kontakt: ${event.contact}")
@@ -120,7 +123,7 @@ import java.util.Locale
                 .putExtra(android.provider.CalendarContract.Events.TITLE, event.title).putExtra(android.provider.CalendarContract.Events.DESCRIPTION, "${event.company}\n${event.responsible}\n${event.note}")
                 .putExtra(android.provider.CalendarContract.EXTRA_EVENT_BEGIN_TIME, begin).putExtra(android.provider.CalendarContract.EXTRA_EVENT_END_TIME, begin + event.minutes * 60000L)) }
         }) { Text("Kopie im Systemkalender öffnen") }
-        TextButton(onClick = { selected = d.work.appointments.single { it.id == event.id }; editing = true }, enabled = !busy) { Text("Termin bearbeiten") }; TextButton(onClick = { remove = event }, enabled = !busy) { Text("Termin / Serie löschen") }
+        TextButton(onClick = { selected = d.work.appointments.single { it.id == event.id }; editing = true }, enabled = !busy) { Text("Termin bearbeiten") }; TextButton(onClick = { remove = event }, enabled = !busy) { Text("Termin / Serie löschen", color = MaterialTheme.colorScheme.error) }
     } }
     Hint("Systemkalender-Kopien können je nach Kalenderkonto synchronisiert werden; keine automatische Übertragung. Wiederholungen werden für die nächsten 6 Monate angezeigt. Bearbeiten ändert die gesamte Serie. Erinnerungen sind lokal und können durch Android verzögert werden.")
     remove?.let { event -> ConfirmRemoval("Termin / Serie löschen?", "Alle Wiederholungen dieses Termins werden entfernt. Kopien im Systemkalender bleiben unverändert.", busy, { remove = null }) { save(d.copy(work = d.work.copy(appointments = d.work.appointments.filterNot { it.id == event.id }))) { remove = null } } }
@@ -170,25 +173,26 @@ val LocalGuideStepAction = staticCompositionLocalOf<((() -> Unit)?) -> Unit> { {
         Field(query, { query = it }, "Anleitungen suchen")
         val results = d.work.guides.filter { g -> listOf(g.title, assetName(d, g.assetId)) .any { it.contains(query, true) } || g.steps.any { "${it.title} ${it.body}".contains(query, true) } }.sortedBy { it.title.lowercase() }
         PagedRecords(results, query, { it.id }) { g -> Panel {
-            Text(g.title, fontSize = 21.sp, fontWeight = FontWeight.Bold); Text(if (g.assetId.isBlank()) "Allgemeine Anleitung" else assetName(d, g.assetId), color = Mint)
+            Text(g.title, fontSize = 21.sp, fontWeight = FontWeight.Bold); Text(if (g.assetId.isBlank()) "Allgemeine Anleitung" else assetName(d, g.assetId), color = Muted)
             Text("${g.steps.size} Schritte"); TextButton(onClick = { select(g.id) }) { Text("Anleitung öffnen") }
         } }
     } else {
         Text(guide.title, fontSize = 24.sp, fontWeight = FontWeight.Bold)
         if (guide.assetId.isNotBlank()) RecordLink("Anlagen", guide.assetId, "Anlage: ${assetName(d, guide.assetId)}")
         d.entries.filter { guide.id in it.guideIds }.forEach { RecordLink("Vorgang", it.id, "Verwendet bei: ${it.title}") }
-        Text("Version ${guide.revision} · Geprüft: ${guide.checked.ifBlank { "Noch nicht" }}", color = Muted)
+        Text("Version ${guide.revision}", color = Muted)
+        StatusBadge("Geprüft: ${guide.checked.ifBlank { "Noch nicht" }}", if (guide.checked.isBlank()) StatusTone.NEUTRAL else StatusTone.SUCCESS)
         guide.steps.forEachIndexed { index, step -> Panel {
             Text("${index + 1}. ${step.title}", fontSize = 20.sp, fontWeight = FontWeight.Bold); Text(step.body); StoredPhoto(step.image)
             Row { TextButton(onClick = { selectedStep = step; stepEditor = true }, enabled = !busy) { Text("Bearbeiten") }
                 TextButton(onClick = { photo(PhotoTarget("guide", step.id)) }, enabled = !busy && (step.image.isNotEmpty() || imageValues(d).count { it.isNotEmpty() } < MAX_IMAGES)) { Text(if (step.image.isEmpty()) "+ Foto" else "Foto ersetzen") } }
             Row { TextButton(onClick = { val steps = guide.steps.toMutableList(); val previous = steps[index - 1]; steps[index - 1] = step; steps[index] = previous; update(guide.copy(steps = steps)) }, enabled = !busy && index > 0) { Text("Nach oben") }
-                if (step.image.isNotEmpty()) TextButton(onClick = { update(guide.copy(steps = guide.steps.map { if (it.id == step.id) it.copy(image = "") else it })) }, enabled = !busy) { Text("Bild entfernen") }
-                TextButton(onClick = { deletion = step }, enabled = !busy) { Text("Löschen") } }
+                if (step.image.isNotEmpty()) TextButton(onClick = { update(guide.copy(steps = guide.steps.map { if (it.id == step.id) it.copy(image = "") else it })) }, enabled = !busy) { Text("Bild entfernen", color = MaterialTheme.colorScheme.error) }
+                TextButton(onClick = { deletion = step }, enabled = !busy) { Text("Löschen", color = MaterialTheme.colorScheme.error) } }
         } }
         Section("Anleitungseinstellungen")
         TextButton(onClick = { update(guide.copy(checked = LocalDate.now().format(DateTimeFormatter.ofPattern("dd.MM.uuuu")))) }, enabled = !busy) { Text("Heute inhaltlich geprüft") }
-        TextButton(onClick = { editor = true }, enabled = !busy) { Text("Titel / Anlage bearbeiten") }; TextButton(onClick = { deleteGuide = true }, enabled = !busy) { Text("Anleitung löschen") }
+        TextButton(onClick = { editor = true }, enabled = !busy) { Text("Titel / Anlage bearbeiten") }; TextButton(onClick = { deleteGuide = true }, enabled = !busy) { Text("Anleitung löschen", color = MaterialTheme.colorScheme.error) }
         if (guide.steps.isEmpty()) Hint("Füge oben den ersten Arbeitsschritt hinzu.")
         Hint("Bilder: max. 512 KiB pro Bild, insgesamt höchstens 500 Bilder für Anlagen, Anleitungen und Bestelllisten. Fotos erst nach dem Speichern des Schritts hinzufügen.")
     }
@@ -208,8 +212,8 @@ val LocalGuideStepAction = staticCompositionLocalOf<((() -> Unit)?) -> Unit> { {
             update(guide.copy(steps = if (guide.steps.none { it.id == next.id }) guide.steps + next else guide.steps.map { if (it.id == next.id) next else it })) { stepEditor = false }
         }) { Field(title, { title = it }, "Schritt *"); Field(body, { body = it }, "Beschreibung / Voraussetzungen / Kontrolle", 6) }
     }
-    deletion?.let { step -> AlertDialog(onDismissRequest = { deletion = null }, title = { Text("Schritt löschen?") }, text = { Text("${step.title} samt Bild wird aus der Anleitung entfernt.") },
-        confirmButton = { TextButton(onClick = { guide?.let { update(it.copy(steps = it.steps.filterNot { x -> x.id == step.id })) { deletion = null } } }, enabled = !busy) { Text("Löschen") } },
+    deletion?.let { step -> AlertDialog(onDismissRequest = { deletion = null }, title = { Text("Schritt löschen?", color = MaterialTheme.colorScheme.error) }, text = { Text("${step.title} samt Bild wird aus der Anleitung entfernt.") },
+        confirmButton = { TextButton(onClick = { guide?.let { update(it.copy(steps = it.steps.filterNot { x -> x.id == step.id })) { deletion = null } } }, enabled = !busy) { Text("Löschen", color = MaterialTheme.colorScheme.error) } },
         dismissButton = { TextButton(onClick = { deletion = null }) { Text("Abbrechen") } }) }
 }
 
@@ -227,25 +231,26 @@ val LocalGuideStepAction = staticCompositionLocalOf<((() -> Unit)?) -> Unit> { {
         Field(query, { query = it }, "Bestellungen, Artikel oder Anlagen suchen")
         Choices(listOf("Offen", "Alle", "Erledigt"), statusFilter) { statusFilter = it }
         val results = d.work.orders.filter { o -> (statusFilter == "Alle" || (statusFilter == "Erledigt") == (o.status in listOf("Geliefert", "Abgesagt"))) && ("${o.title} ${o.context} ${assetName(d, o.assetId)}".contains(query, true) || o.items.any { "${it.name} ${it.reason} ${assetName(d, it.assetId)}".contains(query, true) }) }.reversed()
-        PagedRecords(results, "$query:$statusFilter", { it.id }) { o -> Panel { Text(o.title, fontSize = 22.sp, fontWeight = FontWeight.Bold); Text("${o.items.size} Positionen · ${o.status}", color = Mint)
+        PagedRecords(results, "$query:$statusFilter", { it.id }) { o -> Panel { Text(o.title, fontSize = 22.sp, fontWeight = FontWeight.Bold); Text("${o.items.size} Positionen", color = Muted); StatusBadge(o.status, orderTone(o.status))
             TextButton(onClick = { select(o.id) }) { Text("Öffnen / weiter erfassen") } } }
     } else {
         Text(order.title, fontSize = 24.sp, fontWeight = FontWeight.Bold)
+        StatusBadge(order.status, orderTone(order.status), Modifier.padding(vertical = 8.dp))
         Panel {
             Text("Grundinformationen · nur lokal", fontWeight = FontWeight.Bold)
             if (order.assetId.isNotBlank()) RecordLink("Anlagen", order.assetId, assetName(d, order.assetId))
             d.entries.find { it.id == order.entryId }?.let { RecordLink("Vorgang", it.id, "Vorgang: ${it.title}") }
             if (order.context.isNotBlank()) Text(order.context)
             TextButton(onClick = { editor = true }, enabled = !busy) { Text("Grundinformationen bearbeiten") }
-        }; TextButton(onClick = { deleteOrder = true }, enabled = !busy) { Text("Bestellliste löschen") }
+        }; TextButton(onClick = { deleteOrder = true }, enabled = !busy) { Text("Bestellliste löschen", color = MaterialTheme.colorScheme.error) }
         order.items.forEachIndexed { index, item -> Panel {
             Text("${index + 1}. ${item.quantity} ${item.unit} · ${item.name}", fontSize = 19.sp, fontWeight = FontWeight.Bold)
-            if (item.assetId.isNotBlank()) Text("Nur lokal: ${assetName(d, item.assetId)}", color = Mint)
+            if (item.assetId.isNotBlank()) Text("Nur lokal: ${assetName(d, item.assetId)}", color = Muted)
             if (item.reason.isNotBlank()) Text(item.reason); StoredPhoto(item.image)
             Row { TextButton(onClick = { selectedItem = item; itemEditor = true }, enabled = !busy) { Text("Bearbeiten") }
                 TextButton(onClick = { photo(PhotoTarget("order", item.id)) }, enabled = !busy && (item.image.isNotEmpty() || imageValues(d).count { it.isNotEmpty() } < MAX_IMAGES)) { Text(if (item.image.isEmpty()) "+ Foto" else "Foto ersetzen") } }
-            Row { if (item.image.isNotEmpty()) TextButton(onClick = { update(order.copy(items = order.items.map { if (it.id == item.id) it.copy(image = "") else it })) }, enabled = !busy) { Text("Bild entfernen") }
-                TextButton(onClick = { deletion = item }, enabled = !busy) { Text("Entfernen") } }
+            Row { if (item.image.isNotEmpty()) TextButton(onClick = { update(order.copy(items = order.items.map { if (it.id == item.id) it.copy(image = "") else it })) }, enabled = !busy) { Text("Bild entfernen", color = MaterialTheme.colorScheme.error) }
+                TextButton(onClick = { deletion = item }, enabled = !busy) { Text("Entfernen", color = MaterialTheme.colorScheme.error) } }
         } }
         Button(onClick = { selectedItem = null; itemEditor = true }, enabled = !busy) { Text("+ Nächstes Teil") }
         OutlinedButton(onClick = { preview = true }, enabled = order.items.isNotEmpty() && !busy) { Text("Bestellung als E-Mail vorbereiten") }
@@ -281,11 +286,11 @@ val LocalGuideStepAction = staticCompositionLocalOf<((() -> Unit)?) -> Unit> { {
         }
     }
     if (preview && order != null) Form("E-Mail-Vorschau", !busy, { preview = false }, { preview = false; mail(order) }, confirmLabel = "E-Mail-App öffnen") {
-        Text("An: ${order.recipient.ifBlank { "Auswahl in E-Mail-App" }}", color = Mint)
+        Text("An: ${order.recipient.ifBlank { "Auswahl in E-Mail-App" }}", color = Muted)
         Hint("Text und ${order.items.count { it.image.isNotEmpty() }} Bilder werden unverschlüsselt an die gewählte Versand-App übergeben. Der nächste Button öffnet den Entwurf, er sendet nichts.")
         Text(orderText(order))
     }
-    deletion?.let { item -> AlertDialog(onDismissRequest = { deletion = null }, title = { Text("Position entfernen?") }, text = { Text(item.name) },
-        confirmButton = { TextButton(onClick = { order?.let { update(it.copy(items = it.items.filterNot { x -> x.id == item.id })) { deletion = null } } }, enabled = !busy) { Text("Entfernen") } },
+    deletion?.let { item -> AlertDialog(onDismissRequest = { deletion = null }, title = { Text("Position entfernen?", color = MaterialTheme.colorScheme.error) }, text = { Text(item.name) },
+        confirmButton = { TextButton(onClick = { order?.let { update(it.copy(items = it.items.filterNot { x -> x.id == item.id })) { deletion = null } } }, enabled = !busy) { Text("Entfernen", color = MaterialTheme.colorScheme.error) } },
         dismissButton = { TextButton(onClick = { deletion = null }) { Text("Abbrechen") } }) }
 }

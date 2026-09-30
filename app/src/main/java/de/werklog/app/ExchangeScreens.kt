@@ -36,12 +36,12 @@ val LocalTransferScope = staticCompositionLocalOf<(Boolean) -> Unit> { {} }
                 if (info == null) {
                     Row { Checkbox(history, { history = it }, enabled = !working); Text("Störungen und Messwerte einschließen", modifier = Modifier.padding(top = 12.dp).weight(1f)) }
                     Row { Checkbox(credentials, { credentials = it }, enabled = !working); Text("Zugangsdaten ausdrücklich einschließen", modifier = Modifier.padding(top = 12.dp).weight(1f)) }
-                    if (credentials) Text("Enthält ${selection.credentials.size} Zugänge samt Passwörtern. Nur an berechtigte Kollegen geben.", color = Amber)
+                    if (credentials) Text("Enthält ${selection.credentials.size} Zugänge samt Passwörtern. Nur an berechtigte Kollegen geben.", color = Warning)
                 }
                 Hint("Verschlüsselte Datei mit eigenem Zufallscode. Dein persönliches App-Passwort wird nicht weitergegeben. Datei und Code getrennt übermitteln.")
                 if (working) LinearProgressIndicator(Modifier.fillMaxWidth())
             } else {
-                Text(code!!, fontFamily = FontFamily.Monospace, fontSize = 22.sp, color = Mint)
+                Text(code!!, fontFamily = FontFamily.Monospace, fontSize = 22.sp, color = Accent)
                 Hint("Jetzt separat notieren. Der Code wird nach dem Schließen nicht gespeichert. Teile ihn persönlich oder über einen anderen Kommunikationsweg als die Datei.")
                 Row { Checkbox(noted, { noted = it }); Text("Code separat notiert", modifier = Modifier.padding(top = 12.dp).weight(1f)) }
                 Text("Die Empfänger-App zeigt den Inhalt vor dem Import. Jede Person mit Datei UND Code kann den Inhalt entschlüsseln.")
@@ -115,10 +115,10 @@ val LocalTransferScope = staticCompositionLocalOf<(Boolean) -> Unit> { {} }
                 Picker("Importziel", listOf("" to "Neue Anlagenkopie") + current.assets.map { it.id to it.name }, target) { target = it; replace = false }
                 if (target.isNotEmpty()) {
                     if (comparing) LinearProgressIndicator(Modifier.fillMaxWidth())
-                    comparison?.let { Text("${it.fresh} neu · ${it.changed} geändert · ${it.unchanged} unverändert", color = Mint) }
+                    comparison?.let { Text("${it.fresh} neu · ${it.changed} geändert · ${it.unchanged} unverändert", color = Muted) }
                     Hint("Vorhandene Anlagen-Stammdaten bleiben lokal. Neue Inhalte werden ergänzt. Wiederholte Importe derselben IDs erzeugen keine Duplikate.")
                     Row { Checkbox(replace, { replace = it }); Text("Auch bereits zugeordnete Inhalte durch diese Version ersetzen") }
-                    if (replace) Text("Ersetzt auch lokal bearbeitete Inhalte mit gleicher Herkunft. Es werden keine fehlenden Inhalte gelöscht.", color = Amber)
+                    if (replace) Text("Ersetzt auch lokal bearbeitete Inhalte mit gleicher Herkunft. Es werden keine fehlenden Inhalte gelöscht.", color = Warning)
                 } else Hint("Neue Anlagenkopie mit eigener Identität. Herkunft und Richtigkeit bitte prüfen.")
                 listOf("Hersteller" to a.manufacturer, "Typ" to a.model, "Seriennummer" to a.serial,
                     "Servicekontakt" to a.contact, "Ersatzteile" to a.spareParts, "Wartung" to a.nextService, "Hinweise" to a.note).forEach { (label, value) ->
@@ -128,7 +128,7 @@ val LocalTransferScope = staticCompositionLocalOf<(Boolean) -> Unit> { {} }
                 preview.entries.forEach { Text("${it.status} · ${it.title}", fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 12.dp)); Text(it.note) }
                 preview.readings.forEach { Text("${it.label}: ${it.value} ${it.unit} · ${stamp(it.created)}", modifier = Modifier.padding(top = 8.dp)) }
                 preview.work.guides.forEach { g -> Text("Anleitung: ${g.title}", fontWeight = FontWeight.Bold); g.steps.forEachIndexed { index, s -> Text("${index + 1}. ${s.title}"); Text(s.body); CompositionLocalProvider(LocalImageLoader provides { value -> withContext(Dispatchers.IO) { opened!!.image(value) } }) { StoredPhoto(s.image) } } }
-                preview.credentials.forEach { Text("Zugang: ${it.title} (Passwort verborgen)", color = Amber, modifier = Modifier.padding(top = 8.dp)) }
+                preview.credentials.forEach { Text("Zugang: ${it.title} (Passwort verborgen)", color = Warning, modifier = Modifier.padding(top = 8.dp)) }
             }
             error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
         } },

@@ -62,10 +62,10 @@ private val operationTiles = listOf(
                                 .semantics(mergeDescendants = true) { role = Role.Button },
                             shape = RoundedCornerShape(18.dp),
                             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                            border = BorderStroke(1.dp, Mint.copy(alpha = .14f))) {
+                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)) {
                             Column(Modifier.fillMaxSize().padding(12.dp), horizontalAlignment = Alignment.CenterHorizontally,
                                 verticalArrangement = Arrangement.Center) {
-                                Icon(tile.icon, null, tint = Mint, modifier = Modifier.size(30.dp))
+                                Icon(tile.icon, null, tint = Accent, modifier = Modifier.size(30.dp))
                                 Spacer(Modifier.height(8.dp))
                                 Box(Modifier.fillMaxWidth().height(titleHeight), contentAlignment = Alignment.Center) {
                                     Text(tile.name, style = titleStyle, modifier = Modifier.fillMaxWidth())

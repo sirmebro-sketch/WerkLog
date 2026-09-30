@@ -2,7 +2,15 @@
 
 Lokaler Android-Companion für Servicetechniker, in **Kotlin und Jetpack Compose**. Kein Konto, keine Internetberechtigung, keine Java-Quelldateien. Öffentlich ist der Quellcode; Arbeitsdaten liegen ausschließlich im verschlüsselten Gerätespeicher.
 
-## 0.6.1 — Einheitliche Kacheln und klare Rückwege
+## 0.7.0 — Vier Farbkonzepte
+
+Unter **Einstellung → Darstellung** stehen das überarbeitete **Petrol & Mint**, kühles **Stahlblau**, warmes **Graphit & Kupfer** und der helle Modus **Tageslicht** zur Wahl. Alle ändern Hintergrund, Karten, Text, Aktionen und Navigation, einschließlich Formulare, Dialoge, Bildansicht und Sperrbildschirm. Klare Konturen trennen Karten und Felder. Die Auswahl wirkt sofort, ohne offene Formulare zu schließen, und bleibt lokal auf dem Gerät gespeichert.
+
+Optional **Geräteeinstellung folgen**: Bei hellem Gerätedesign gilt Tageslicht, bei dunklem das zuletzt gewählte dunkle Konzept. Eine manuelle Auswahl beendet diese Automatik. Die Darstellungspräferenz enthält nur Farb-IDs; sie gehört nicht zum Tresor, Sicherungsexport oder Kollegenaustausch.
+
+Statusanzeigen haben klare Bedeutungen und zusätzliche Texte/Symbole: offen neutral, laufend blau, wichtig/Hinweis orange, dringend/überfällig/fehlerhaft rot und abgeschlossen grün. Diese Bedeutungen ändern sich beim Farbwechsel nicht. QR-Codes behalten Schwarz/Weiß. Details: [Farbkonzepte 0.7.0](docs/UI-REVIEW-0.7.0.md).
+
+### Ergänzungen aus 0.6.1 — Einheitliche Kacheln und klare Rückwege
 
 Alle Betriebskacheln haben dieselbe Größe, passende Beschreibungen und gemeinsame Text-/Symbolbereiche. Das Raster berücksichtigt große Systemschrift und lässt die letzte Kachel nicht über die ganze Zeile wachsen. Auch die aktive Markierung in der unteren Navigation verwendet die App-Farben. Ein fester Zurück-Pfeil führt aus Details zur Liste und bei Verknüpfungen zum Ausgangsdatensatz; diese Rückwege bleiben nach einer Sperre erhalten. Aus Störungen erzeugte Folgetermine öffnen direkt ihre Bearbeitung. Entsperren ist auch mit „Fertig“ an der Bildschirmtastatur möglich. Prüfung und Grenzen: [UI-Review 0.6.1](docs/UI-REVIEW-0.6.1.md).
 

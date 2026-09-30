@@ -9,6 +9,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 
@@ -16,14 +17,15 @@ import androidx.compose.ui.unit.dp
     val points = history.take(30).reversed()
     if (points.size < 2) return
     Text("Letzte ${points.size} Ablesungen · zeitlicher Verlauf", color = Muted)
+    val lineColor = Accent; val resetColor = Warning
     Canvas(Modifier.fillMaxWidth().height(100.dp).padding(8.dp)) {
         val min = points.minOf { it.value }; val range = (points.maxOf { it.value } - min).coerceAtLeast(1.0)
         val first = points.first().created; val duration = (points.last().created - first).coerceAtLeast(1)
-        fun point(r: Reading) = Offset(((r.created - first).toDouble() / duration * size.width).toFloat(), (size.height * (1 - (r.value - min) / range)).toFloat())
-        points.zipWithNext().forEach { (a, b) -> if (!b.reset) drawLine(Mint, point(a), point(b), 3f) }
-        points.forEach { drawCircle(if (it.reset) Amber else Mint, 4f, point(it)) }
+        fun point(r: Reading) = Offset(((r.created - first).toDouble() / duration * (size.width - 10) + 5).toFloat(), ((size.height - 10) * (1 - (r.value - min) / range) + 5).toFloat())
+        points.zipWithNext().forEach { (a, b) -> if (!b.reset) drawLine(lineColor, point(a), point(b), 3f) }
+        points.forEach { if (it.reset) drawRect(resetColor, point(it) - Offset(4f, 4f), Size(8f, 8f)) else drawCircle(lineColor, 4f, point(it)) }
     }
-    Text("${points.minOf { it.value }} – ${points.maxOf { it.value }} ${points.last().unit} · Orange = Zählerwechsel", color = Muted)
+    Text("${points.minOf { it.value }} – ${points.maxOf { it.value }} ${points.last().unit} · Quadrat = Zählerwechsel", color = Muted)
 }
 @Composable fun TemplateScreen(d: Data, busy: Boolean, save: DataSaver) {
     var editing by rememberSaveable { mutableStateOf(false) }; var selected by rememberSaveable { mutableStateOf<EntryTemplate?>(null) }
@@ -33,7 +35,7 @@ import androidx.compose.ui.unit.dp
     (starterTemplates + d.work.templates).forEach { t -> Panel {
         Text(t.name); Text(t.body)
         TextButton(onClick = { selected = if (t in starterTemplates) t.copy(id = newId()) else t; editing = true }, enabled = !busy) { Text(if (t in starterTemplates) "Als eigene Vorlage anpassen" else "Bearbeiten") }
-        if (t !in starterTemplates) TextButton(onClick = { save(d.copy(work = d.work.copy(templates = d.work.templates.filterNot { it.id == t.id }))) }, enabled = !busy) { Text("Vorlage entfernen") }
+        if (t !in starterTemplates) TextButton(onClick = { save(d.copy(work = d.work.copy(templates = d.work.templates.filterNot { it.id == t.id }))) }, enabled = !busy) { Text("Vorlage entfernen", color = MaterialTheme.colorScheme.error) }
     } }
     if (editing) {
         val recordId = rememberSaveable { selected?.id ?: newId() }
@@ -56,5 +58,5 @@ import androidx.compose.ui.unit.dp
     }
 }
 @Composable fun ConfirmRemoval(label: String, detail: String, busy: Boolean, close: () -> Unit, remove: () -> Unit) {
-    AlertDialog(onDismissRequest = close, title = { Text(label) }, text = { Text(detail) }, confirmButton = { TextButton(onClick = remove, enabled = !busy) { Text("Löschen") } }, dismissButton = { TextButton(onClick = close) { Text("Abbrechen") } })
+    AlertDialog(onDismissRequest = close, title = { Text(label) }, text = { Text(detail) }, confirmButton = { TextButton(onClick = remove, enabled = !busy) { Text("Löschen", color = MaterialTheme.colorScheme.error) } }, dismissButton = { TextButton(onClick = close) { Text("Abbrechen") } })
 }

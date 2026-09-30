@@ -194,3 +194,14 @@ Zusätzliche Gerätechecks:
 - [ ] Folgetermin aus Störung: Bearbeitung des richtigen neu erzeugten Termins geöffnet; Termin speichern/abbrechen und zur Störung zurückkehren.
 - [ ] Tastatur: Entsperren mit „Fertig“, falsches Passwort bleibt abgewiesen; beim Einrichten „Weiter“ und „Fertig“ mit Passwortwiederholung.
 - [ ] Navigation Heute/Betrieb/Einstellung setzt den jeweiligen Hauptbereich auf seine Startseite; normale Android-Zurück-Geste und Kopf-Pfeil führen gleich zurück.
+
+
+## Zusätzliche Geräteabnahme 0.7.0 — Farbkonzepte
+
+- [ ] Alle vier Konzepte unter Einstellung → Darstellung; sofortiger Wechsel und Auswahl nach Kaltstart.
+- [ ] Tageslicht draußen/bei Sonne und dunkle Varianten im Arbeitsbereich prüfen. Displayhelligkeit ist weiterhin die Geräteeinstellung.
+- [ ] Geräteeinstellung folgen: hell → Tageslicht; dunkel → zuletzt gewähltes dunkles Konzept. Manuelle Auswahl beendet die Automatik.
+- [ ] Große Samsung-Schrift/Anzeige, Querformat und TalkBack: Farbauswahl, Statusbeschriftungen, Felder und Dialoge lesbar und erreichbar.
+- [ ] Dunkle Symbole in Status-/Navigationsleiste bei Tageslicht, helle in dunklen Varianten; Gesten- und Drei-Tasten-Navigation.
+- [ ] Sperren/Entsperren, Fingerabdruck, Kamera, Galerie, Import, E-Mail-Vorschau, Zoom und geöffnete Formulare in Tageslicht prüfen.
+- [ ] Status verständlich ohne Farberkennung: neutral offen, blau laufend, orange wichtig/Hinweis, rot dringend/überfällig, grün abgeschlossen.

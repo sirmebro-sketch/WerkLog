@@ -17,6 +17,7 @@ class NavigationTest {
         context.filesDir.listFiles()?.forEach { it.deleteRecursively() }
         context.getSharedPreferences("onboarding", 0).edit().clear().commit()
         context.getSharedPreferences("biometric", 0).edit().clear().commit()
+        context.getSharedPreferences("appearance", 0).edit().clear().commit()
         ActivityScenario.launch(MainActivity::class.java).use { scenario ->
             lateinit var diagnosticModel: WorkModel
             scenario.onActivity { diagnosticModel = androidx.lifecycle.ViewModelProvider(it)[WorkModel::class.java] }

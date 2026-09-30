@@ -6,7 +6,6 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.SemanticsActions
@@ -25,11 +24,12 @@ class UiLayoutTest {
     @get:Rule val ui = createComposeRule()
     @Test fun allTilesHaveEqualDimensionsAndReadableLabelsAtLargeFontScale() {
         val fontScale = mutableFloatStateOf(1f)
+        val theme = mutableStateOf(WerkTheme.PETROL)
         var opened: String? = null
         ui.setContent {
             val density = LocalDensity.current.density
             CompositionLocalProvider(LocalDensity provides Density(density, fontScale.floatValue)) {
-                MaterialTheme(colorScheme = darkColorScheme(primary = Mint, surface = Color(0xFF14262D), background = Color(0xFF0C191E), onSurface = Color(0xFFE8F2F3))) {
+                WerkLogTheme(theme.value) {
                     Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
                         Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(20.dp)) {
                             Box(Modifier.width(320.dp)) { OperationTiles { opened = it } }
@@ -40,8 +40,8 @@ class UiLayoutTest {
         }
         val names = listOf("Anlagen", "Arbeitsprotokoll", "Zähler", "Rundgang", "Anleitungen", "Bestellungen", "Kalender", "Adressbuch", "Textvorlagen")
         val hints = listOf("Technik & Wissen", "Störungen & Arbeiten", "Ablesen & Verlauf", "Prüfen & abhaken", "Schritt für Schritt", "Teile & Ausrüstung", "Termine & Firmen", "Kontakte & Aufgaben", "Texte wiederverwenden")
-        for (scale in listOf(1f, 1.8f)) {
-            ui.runOnIdle { fontScale.floatValue = scale }
+        for (concept in WerkTheme.entries) for (scale in listOf(1f, 1.8f)) {
+            ui.runOnIdle { theme.value = concept; fontScale.floatValue = scale }
             ui.waitForIdle()
             var expectedWidth: Float? = null; var expectedHeight: Float? = null
             for ((index, name) in names.withIndex()) {
@@ -63,7 +63,7 @@ class UiLayoutTest {
             ui.onNodeWithTag("operation-tile-Anlagen").performScrollTo()
             ui.onRoot().captureToImage().asAndroidBitmap().let { bitmap ->
                 val folder = File(requireNotNull(InstrumentationRegistry.getArguments().getString("additionalTestOutputDir")))
-                File(folder, if (scale == 1f) "betrieb-kacheln.png" else "betrieb-grosse-schrift.png").apply { parentFile?.mkdirs() }
+                File(folder, if (scale == 1f) "raster-${concept.id}.png" else "raster-${concept.id}-grosse-schrift.png").apply { parentFile?.mkdirs() }
                     .outputStream().use { bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it) }
             }
         }

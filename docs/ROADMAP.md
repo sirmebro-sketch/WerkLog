@@ -1,4 +1,8 @@
-# Stand 0.6.1 — Umsetzung und Grenzen
+# Stand 0.7.0 — Umsetzung und Grenzen
+
+## Gestaltung 0.7.0
+
+Vier vollständige Farbkonzepte unter Einstellung → Darstellung: überarbeitetes Petrol & Mint, Stahlblau, Graphit & Kupfer, Tageslicht (hell). Lokale, sofortige Auswahl mit optionaler Systemautomatik und erhaltenen offenen Formularen. Hintergrund, Karten, Konturen, Texte, Formulare, Dialoge, Fotos, Kalender und Systemleisten verwenden gemeinsame Farbrollen. Dringend/überfällig rot, wichtig/Hinweise orange, laufend blau, fertig grün; Text und Symbol ergänzen die Farbe. Fachliche Daten und Datenschema bleiben unverändert. Details und Prüfergebnisse: [UI-REVIEW-0.7.0.md](UI-REVIEW-0.7.0.md).
 
 ## Gestaltung und Bedienung 0.6.1
 

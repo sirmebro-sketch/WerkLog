@@ -48,7 +48,7 @@ val PowerPlantIcon: ImageVector by lazy {
     val maxHeight = (LocalConfiguration.current.screenHeightDp * .30f).dp
     Surface(color = MaterialTheme.colorScheme.surface, tonalElevation = 4.dp) {
         Column(Modifier.fillMaxWidth().heightIn(max = maxHeight).verticalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 8.dp)) {
-            Text("${step + 1}/4 · $title", color = Mint, fontWeight = FontWeight.Bold)
+            Text("${step + 1}/4 · $title", color = Accent, fontWeight = FontWeight.Bold)
             Text(hint, style = MaterialTheme.typography.bodySmall)
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                 TextButton(onClick = skip) { Text("Überspringen") }
@@ -75,7 +75,7 @@ val PowerPlantIcon: ImageVector by lazy {
         }
     }.getOrNull() }
     if (bitmap != null) Image(bitmap.asImageBitmap(), "Profilbild", contentScale = ContentScale.Crop, modifier = Modifier.size(64.dp).clip(CircleShape))
-    else Icon(Icons.Outlined.Person, "Lokales Profil", tint = Mint, modifier = Modifier.size(64.dp))
+    else Icon(Icons.Outlined.Person, "Lokales Profil", tint = Accent, modifier = Modifier.size(64.dp))
 }
 
 @Composable internal fun ProfilePanel(d: Data, busy: Boolean, save: DataSaver, photo: (PhotoTarget) -> Unit) {
@@ -93,8 +93,8 @@ val PowerPlantIcon: ImageVector by lazy {
         Hint("Im Tresor geschützt. In Vollsicherungen enthalten, nicht in Anlagenfreigaben oder automatisch in E-Mails.")
         OutlinedButton(onClick = { editing = true }, enabled = !busy, modifier = Modifier.fillMaxWidth()) { Text(if (p.name.isEmpty()) "Profil erstellen" else "Profil bearbeiten") }
         TextButton(onClick = { photo(PhotoTarget("profile", "local")) }, enabled = !busy) { Text(if (p.image.isEmpty()) "Profilbild hinzufügen" else "Profilbild ändern") }
-        if (p.image.isNotEmpty()) TextButton(onClick = { save(d.copy(profile = p.copy(image = ""))) }, enabled = !busy) { Text("Profilbild entfernen") }
-        if (p != LocalProfile()) TextButton(onClick = { deleting = true }, enabled = !busy) { Text("Profil löschen") }
+        if (p.image.isNotEmpty()) TextButton(onClick = { save(d.copy(profile = p.copy(image = ""))) }, enabled = !busy) { Text("Profilbild entfernen", color = MaterialTheme.colorScheme.error) }
+        if (p != LocalProfile()) TextButton(onClick = { deleting = true }, enabled = !busy) { Text("Profil löschen", color = MaterialTheme.colorScheme.error) }
     }
     if (editing) {
         var name by rememberSaveable { mutableStateOf(p.name) }; var role by rememberSaveable { mutableStateOf(p.role) }
@@ -112,8 +112,8 @@ val PowerPlantIcon: ImageVector by lazy {
             Hint("Außer deinem Namen ist alles freiwillig. Kein Online-Konto, keine Anmeldung.")
         }
     }
-    if (deleting) AlertDialog(onDismissRequest = { deleting = false }, title = { Text("Profil löschen?") },
-        text = { Text("Name, Profilbild und Kontaktdaten entfernen? Deine Anlagen und Arbeitsdaten bleiben erhalten.") },
-        confirmButton = { TextButton(onClick = { save(d.copy(profile = LocalProfile())) { deleting = false } }, enabled = !busy) { Text("Löschen") } },
+    if (deleting) AlertDialog(onDismissRequest = { deleting = false }, title = { Text("Profil löschen?", color = MaterialTheme.colorScheme.error) },
+        text = { Text("Name, Profilbild und Kontaktdaten entfernen? Deine Anlagen und Arbeitsdaten bleiben erhalten.", color = MaterialTheme.colorScheme.error) },
+        confirmButton = { TextButton(onClick = { save(d.copy(profile = LocalProfile())) { deleting = false } }, enabled = !busy) { Text("Löschen", color = MaterialTheme.colorScheme.error) } },
         dismissButton = { TextButton(onClick = { deleting = false }) { Text("Abbrechen") } })
 }

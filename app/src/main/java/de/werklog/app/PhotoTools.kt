@@ -111,7 +111,7 @@ val LocalImageLoader = staticCompositionLocalOf<suspend (String) -> ByteArray> {
             usePlatformDefaultWidth = false, decorFitsSystemWindows = false, securePolicy = SecureFlagPolicy.SecureOn)) {
             var zoom by remember { mutableFloatStateOf(1f) }
             var offset by remember { mutableStateOf(Offset.Zero) }
-            Surface(Modifier.fillMaxSize(), color = androidx.compose.ui.graphics.Color.Black) {
+            Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background, contentColor = MaterialTheme.colorScheme.onBackground) {
                 Column(Modifier.fillMaxSize().systemBarsPadding()) {
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                         TextButton(onClick = { zoom = 1f; offset = Offset.Zero }) { Text("Zurücksetzen") }
@@ -150,7 +150,7 @@ val LocalImageLoader = staticCompositionLocalOf<suspend (String) -> ByteArray> {
         Form("Anlage erkennen", asset != null && !busy, close, { asset?.let { openAsset(it.id) } }, confirmLabel = "Anlagenakte öffnen") {
             if (result == null && error == null) LinearProgressIndicator(Modifier.fillMaxWidth())
             Text(asset?.name ?: if (result != null) "Kein eindeutiger Treffer. Kennzeichen prüfen oder Anlage zuerst importieren." else "Code wird lokal gelesen …")
-            error?.let { Text(it, color = Amber) }
+            error?.let { Text(it, color = Critical) }
         }
         return
     }
@@ -172,7 +172,7 @@ val LocalImageLoader = staticCompositionLocalOf<suspend (String) -> ByteArray> {
                 Choices(meterCandidates(recognized), value) { value = it; confirmed = false }
                 if (meterCandidates(recognized).isEmpty()) Hint("Keine eindeutige Zahl erkannt. Wert bitte selbst eintragen.")
             }
-            previous?.let { Text("Vorher: ${it.value} ${it.unit}") }; warning?.let { Text(it, color = Amber) }
+            previous?.let { Text("Vorher: ${it.value} ${it.unit}") }; warning?.let { Text(it, color = Warning) }
             Field(value, { value = it; confirmed = false }, "Bestätigter Zählerstand (${meter?.unit ?: "Einheit"})", numeric = true)
             Row { Checkbox(confirmed, { confirmed = it }, enabled = !busy); Text("Zähler, Einheit und Nachkommastellen am Original geprüft", modifier = Modifier.weight(1f).padding(top = 12.dp)) }
             Hint("Das Zählerfoto wird nicht gespeichert. Nur der bestätigte Zahlenwert kommt ins Protokoll.")

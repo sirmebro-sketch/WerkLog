@@ -29,7 +29,7 @@ import kotlinx.coroutines.delay
     var deleteAsset by rememberSaveable { mutableStateOf(false) }
     var deletion by rememberSaveable { mutableStateOf<Pair<String, String>?>(null) }
     Text(asset.name, fontSize = 28.sp, fontWeight = FontWeight.Bold)
-    Text("${asset.trade} · ${asset.location.ifBlank { "Standort offen" }}", color = Mint)
+    Text("${asset.trade} · ${asset.location.ifBlank { "Standort offen" }}", color = Muted)
     Text(asset.tag, color = Muted)
     Row {
         TextButton(onClick = { save(data.copy(assets = data.assets.map { if (it.id == asset.id) it.copy(favorite = !it.favorite) else it })) }, enabled = !busy) { Text(if (asset.favorite) "★ Favorit entfernen" else "☆ Als Favorit merken") }
@@ -44,7 +44,7 @@ import kotlinx.coroutines.delay
         "Übersicht" -> {
             StoredPhoto(asset.coverImage, true)
             TextButton(onClick = { photo(PhotoTarget("cover", asset.id)) }, enabled = !busy && (asset.coverImage.isNotBlank() || imageValues(data).count { it.isNotEmpty() } < MAX_IMAGES)) { Text(if (asset.coverImage.isBlank()) "+ Anlagenbild" else "Anlagenbild ersetzen") }
-            if (asset.coverImage.isNotBlank()) TextButton(onClick = { save(data.copy(assets = data.assets.map { if (it.id == asset.id) it.copy(coverImage = "") else it })) }, enabled = !busy) { Text("Anlagenbild entfernen") }
+            if (asset.coverImage.isNotBlank()) TextButton(onClick = { save(data.copy(assets = data.assets.map { if (it.id == asset.id) it.copy(coverImage = "") else it })) }, enabled = !busy) { Text("Anlagenbild entfernen", color = MaterialTheme.colorScheme.error) }
             val openRecord = LocalRecordLink.current
             TextButton(onClick = { openRecord("Neue Bestellung", asset.id) }, enabled = !busy) { Text("+ Bestellung für diese Anlage") }
             ContactLinks(data, "Anlagen", asset.id, busy, save)
@@ -58,7 +58,7 @@ import kotlinx.coroutines.delay
             }
             Panel {
                 Text("Wartung & Service", fontSize = 20.sp, fontWeight = FontWeight.Bold)
-                if (asset.nextService.isNotBlank()) Text("${serviceState(asset.nextService)} · ${asset.nextService}", color = Amber)
+                if (asset.nextService.isNotBlank()) StatusBadge("${serviceState(asset.nextService)} · ${asset.nextService}", serviceTone(serviceState(asset.nextService)))
                 else Hint("Noch kein Wartungstermin hinterlegt.")
                 Detail("Ansprechpartner / Servicekontakt", asset.contact)
                 Detail("Ersatzteile / Verbrauchsmaterial", asset.spareParts)
@@ -81,7 +81,7 @@ import kotlinx.coroutines.delay
                 Text("Stand: ${stamp(info.updated)}", color = Muted, fontSize = 11.sp)
                 TextButton(onClick = { shareInfo = info; sharing = true }, enabled = !busy) { Text("Diesen Wissenseintrag teilen") }
                 Row { TextButton(onClick = { selectedInfo = info; infoEditor = true }, enabled = !busy) { Text("Bearbeiten") }
-                    TextButton(onClick = { deletion = "info" to info.id }, enabled = !busy) { Text("Entfernen") } }
+                    TextButton(onClick = { deletion = "info" to info.id }, enabled = !busy) { Text("Entfernen", color = MaterialTheme.colorScheme.error) } }
             } }
         }
         "Zugänge" -> {
@@ -118,12 +118,12 @@ import kotlinx.coroutines.delay
     if (infoEditor) InfoEditor(asset.id, selectedInfo, { infoEditor = false }) { i ->
         save(data.copy(infos = data.infos.filterNot { it.id == i.id } + i)) { infoEditor = false }
     }
-    deletion?.let { target -> AlertDialog(onDismissRequest = { deletion = null }, title = { Text("Eintrag entfernen?") },
+    deletion?.let { target -> AlertDialog(onDismissRequest = { deletion = null }, title = { Text("Eintrag entfernen?", color = MaterialTheme.colorScheme.error) },
         text = { Text("Dieser Eintrag wird aus dem lokalen Tresor entfernt. Bereits erstellte Sicherungen bleiben unverändert.") },
         confirmButton = { TextButton(onClick = {
             if (target.first == "credential") save(data.copy(credentials = data.credentials.filterNot { it.id == target.second })) { deletion = null }
             else save(data.copy(infos = data.infos.filterNot { it.id == target.second })) { deletion = null }
-        }, enabled = !busy) { Text("Entfernen") } }, dismissButton = { TextButton(onClick = { deletion = null }) { Text("Abbrechen") } }) }
+        }, enabled = !busy) { Text("Entfernen", color = MaterialTheme.colorScheme.error) } }, dismissButton = { TextButton(onClick = { deletion = null }) { Text("Abbrechen") } }) }
 }
 
 @Composable private fun Detail(label: String, value: String) {
@@ -141,7 +141,7 @@ import kotlinx.coroutines.delay
         if (visible && c.note.isNotBlank()) Text(c.note)
         Text("Stand: ${stamp(c.updated)}", color = Muted, fontSize = 11.sp)
         Row { TextButton(onClick = { visible = false; edit() }, enabled = !busy) { Text("Bearbeiten") }
-            TextButton(onClick = delete, enabled = !busy) { Text("Entfernen") } }
+            TextButton(onClick = delete, enabled = !busy) { Text("Entfernen", color = MaterialTheme.colorScheme.error) } }
     }
 }
 @Composable private fun CredentialEditor(assetId: String, existing: Credential?, close: () -> Unit, save: (Credential) -> Unit) {
@@ -193,7 +193,7 @@ import kotlinx.coroutines.delay
         Field(contact, { contact = it }, "Servicekontakt / Ansprechpartner", 2)
         Field(parts, { parts = it }, "Ersatzteile, Artikelnummern, Lagerort", 3)
         Field(service, { service = it }, "Nächste Wartung (TT.MM.JJJJ)")
-        if (service.isNotBlank() && parseServiceDate(service) == null) Text("Bitte ein gültiges Datum eingeben, z. B. 15.10.2026.", color = Amber)
+        if (service.isNotBlank() && parseServiceDate(service) == null) Text("Bitte ein gültiges Datum eingeben, z. B. 15.10.2026.", color = Critical)
         Field(note, { note = it }, "Allgemeine Hinweise", 3)
     }
 }

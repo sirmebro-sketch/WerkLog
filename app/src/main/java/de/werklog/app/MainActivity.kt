@@ -15,6 +15,9 @@ import androidx.activity.compose.BackHandler
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.activity.SystemBarStyle
+import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.foundation.BorderStroke
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
 import androidx.compose.foundation.background
@@ -41,11 +44,6 @@ import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 
-internal val Mint = Color(0xFF64DECB)
-internal val Amber = Color(0xFFFFCC80)
-internal val Muted = Color(0xFFABC1C7)
-private val WerkColors = darkColorScheme(primary = Mint, onPrimary = Color(0xFF00382F), secondary = Amber,
-    background = Color(0xFF0C191E), surface = Color(0xFF14262D), surfaceVariant = Color(0xFF20363E), onSurface = Color(0xFFE8F2F3))
 
 class MainActivity : androidx.fragment.app.FragmentActivity() {
     private var handoffUntil = 0L
@@ -67,6 +65,7 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
     }
     override fun onResume() { super.onResume(); requestAutoBiometric() }
     private val biometric by lazy { BiometricLock(this) }
+    internal val appearance by lazy { AppearanceSettings(this) }
     private val notifications = registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted -> if (!granted) model.error = "Benachrichtigungen sind deaktiviert. Termine bleiben im lokalen Kalender sichtbar." }
     fun contactAction(contact: Contact, email: Boolean) {
         try { beginHandoff(); startActivity(Intent(if (email) Intent.ACTION_SENDTO else Intent.ACTION_DIAL, Uri.fromParts(if (email) "mailto" else "tel", if (email) contact.email else contact.phone, null))) }
@@ -154,11 +153,20 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
         OrderAttachmentProvider.cleanup(this)
         File(cacheDir, "camera").listFiles()?.filter { it != photoFile && it != readyPhoto?.first }?.forEach { it.delete() }
         File(cacheDir, "shares").listFiles()?.filter { System.currentTimeMillis() - it.lastModified() > 86_400_000 }?.forEach { it.delete() }
-        setContent { CompositionLocalProvider(LocalImageLoader provides { value -> model.image(value) }, LocalTransferScope provides { active -> transferScopes = (transferScopes + if (active) 1 else -1).coerceAtLeast(0) }) { MaterialTheme(colorScheme = WerkColors) {
-            Surface(Modifier.fillMaxSize(), color = WerkColors.background) {
+        setContent {
+            val theme = appearance.choice.effective(isSystemInDarkTheme())
+            DisposableEffect(theme) {
+                val barColor = theme.palette.background.toInt()
+                enableEdgeToEdge(
+                    statusBarStyle = SystemBarStyle.auto(android.graphics.Color.TRANSPARENT, android.graphics.Color.TRANSPARENT) { theme.isDark },
+                    navigationBarStyle = SystemBarStyle.auto(barColor, barColor) { theme.isDark })
+                onDispose { }
+            }
+            CompositionLocalProvider(LocalImageLoader provides { value -> model.image(value) }, LocalTransferScope provides { active -> transferScopes = (transferScopes + if (active) 1 else -1).coerceAtLeast(0) }) { WerkLogTheme(theme) {
+            Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
                 key("werklog") {
                     if (model.data == null) LockScreen(model, restoreBytes, { restore.launch(arrayOf("*/*")) }, { restoreBytes = null })
-                    else SecureWorkspaceState(model) { CompositionLocalProvider(LocalSaving provides model.busy) { Workspace(model, onExport = {
+                    else SecureWorkspaceState(model) { CompositionLocalProvider(LocalSaving provides model.busy) { Workspace(model, appearance, onExport = {
                         lifecycleScope.launch {
                             val file = File(cacheDir, "backup-${newId()}.werklog")
                             try { model.backup(file); pendingBackup = file; beginHandoff(); export.launch("WerkLog-${java.time.LocalDate.now()}.werklog") }
@@ -299,7 +307,7 @@ private fun java.io.InputStream.readBytesLimited(): ByteArray {
     val lockActivity = androidx.compose.ui.platform.LocalContext.current as MainActivity
     LaunchedEffect(model.session, backup, model.busy, model.error) { if (!creating) lockActivity.requestAutoBiometric() }
     Column(Modifier.fillMaxSize().safeDrawingPadding().verticalScroll(rememberScrollState()).padding(28.dp), verticalArrangement = Arrangement.Center) {
-        Text("W /", color = Mint, fontSize = 58.sp, fontWeight = FontWeight.Black)
+        Text("W /", color = Accent, fontSize = 58.sp, fontWeight = FontWeight.Black)
         Spacer(Modifier.height(24.dp)); Text("WerkLog", fontSize = 38.sp, fontWeight = FontWeight.Bold)
         Text("Dein Technikalltag. Gut dokumentiert.", color = Muted)
         Spacer(Modifier.height(36.dp))
@@ -323,11 +331,11 @@ private fun java.io.InputStream.readBytesLimited(): ByteArray {
         val activity = androidx.compose.ui.platform.LocalContext.current as MainActivity
         if (!creating && backup == null && activity.biometricAvailable()) OutlinedButton(onClick = activity::unlockBiometric, enabled = !model.busy, modifier = Modifier.fillMaxWidth()) { Text("Mit Fingerabdruck / Biometrie öffnen") }
         TextButton(onClick = { if (backup == null) onRestore() else { backup.delete(); cancelRestore() } }, enabled = !model.busy, modifier = Modifier.fillMaxWidth()) { Text(if (backup == null) "Verschlüsselte Sicherung laden" else "Wiederherstellung abbrechen") }
-        Spacer(Modifier.height(24.dp)); Text("OFFLINE  ·  OHNE KONTO  ·  VERSCHLÜSSELT", color = Mint, fontSize = 11.sp)
+        Spacer(Modifier.height(24.dp)); Text("OFFLINE  ·  OHNE KONTO  ·  VERSCHLÜSSELT", color = Accent, fontSize = 11.sp)
     }
 }
 
-@Composable private fun Workspace(model: WorkModel, onExport: () -> Unit, onShare: (String, String) -> Unit, onShareFile: (File) -> Unit, onImport: () -> Unit, onPhoto: (PhotoTarget) -> Unit, onOrder: (PartsOrder) -> Unit, requestedAsset: String?, assetOpened: () -> Unit) {
+@Composable private fun Workspace(model: WorkModel, appearance: AppearanceSettings, onExport: () -> Unit, onShare: (String, String) -> Unit, onShareFile: (File) -> Unit, onImport: () -> Unit, onPhoto: (PhotoTarget) -> Unit, onOrder: (PartsOrder) -> Unit, requestedAsset: String?, assetOpened: () -> Unit) {
     val d = model.data ?: return
     val saveData = remember(model) { DataSaver { next, done -> model.update(next, done) } }
     var tool by model.workspaceTool
@@ -395,14 +403,14 @@ private fun java.io.InputStream.readBytesLimited(): ByteArray {
             else -> pushRoute(WorkspaceRoute(4, kind, recordId = id))
         }
     }) {
-    Scaffold(containerColor = WerkColors.background, topBar = {
+    Scaffold(containerColor = MaterialTheme.colorScheme.background, topBar = {
         Column {
             Row(Modifier.fillMaxWidth().statusBarsPadding().padding(horizontal = 20.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
                 if (page != 0 && !tourVisible) IconButton(onClick = { navigateBack() }, enabled = !model.busy) {
-                    Icon(Icons.Outlined.ArrowBack, "Zurück", tint = Mint)
+                    Icon(Icons.Outlined.ArrowBack, "Zurück", tint = Accent)
                 }
-                Column(Modifier.weight(1f)) { Text("WERKLOG  /  LOKAL", color = Mint, fontSize = 11.sp, fontWeight = FontWeight.Bold); Text(if (page == 4 && tool != null) tool!! else titles[page], fontSize = 30.sp, fontWeight = FontWeight.Bold) }
-                IconButton(onClick = { model.lock() }) { Icon(Icons.Outlined.Lock, "App sperren", tint = Mint) }
+                Column(Modifier.weight(1f)) { Text("WERKLOG  /  LOKAL", color = Accent, fontSize = 11.sp, fontWeight = FontWeight.Bold); Text(if (page == 4 && tool != null) tool!! else titles[page], fontSize = 30.sp, fontWeight = FontWeight.Bold) }
+                IconButton(onClick = { model.lock() }) { Icon(Icons.Outlined.Lock, "App sperren", tint = Accent) }
             }
             if (page == 4 && tool == "Anleitungen" && nextGuideStep != null) Button(
                 onClick = { nextGuideStep?.invoke() }, enabled = !model.busy,
@@ -413,13 +421,13 @@ private fun java.io.InputStream.readBytesLimited(): ByteArray {
         if (tourVisible) TourStrip(tour, tourSteps[tour].second, tourSteps[tour].third,
             back = { if (tour > 0) tour-- }, skip = { finishTour() },
             next = { if (tour == tourSteps.lastIndex) finishTour() else tour++ })
-        NavigationBar(containerColor = WerkColors.surface) {
-            val navigationColors = NavigationBarItemDefaults.colors(selectedIconColor = Mint, selectedTextColor = Mint,
-                indicatorColor = WerkColors.surfaceVariant, unselectedIconColor = Muted, unselectedTextColor = Muted)
+        NavigationBar(containerColor = MaterialTheme.colorScheme.surface) {
+            val navigationColors = NavigationBarItemDefaults.colors(selectedIconColor = MaterialTheme.colorScheme.onPrimaryContainer, selectedTextColor = Accent,
+                indicatorColor = MaterialTheme.colorScheme.primaryContainer, unselectedIconColor = Muted, unselectedTextColor = Muted)
             NavigationBarItem(selected = page == 0, enabled = !model.busy, onClick = { mainPage(0) }, colors = navigationColors, icon = { Icon(Icons.Outlined.Today, "Heute") }, label = { Text("Heute") })
             NavigationBarItem(selected = page in 1..4, enabled = !model.busy, onClick = { mainPage(4) }, colors = navigationColors, icon = {
-                Surface(shape = androidx.compose.foundation.shape.CircleShape, color = Mint, modifier = Modifier.size(58.dp)) {
-                    Box(contentAlignment = Alignment.Center) { Icon(PowerPlantIcon, "Betrieb", tint = WerkColors.background, modifier = Modifier.size(32.dp)) }
+                Surface(shape = androidx.compose.foundation.shape.CircleShape, color = Accent, modifier = Modifier.size(58.dp)) {
+                    Box(contentAlignment = Alignment.Center) { Icon(PowerPlantIcon, "Betrieb", tint = MaterialTheme.colorScheme.onPrimary, modifier = Modifier.size(32.dp)) }
                 }
             }, label = { Text("Betrieb", fontWeight = FontWeight.Bold) })
             NavigationBarItem(selected = page == 5, enabled = !model.busy, onClick = { mainPage(5) }, colors = navigationColors, icon = { Icon(Icons.Outlined.Settings, "Einstellung") }, label = { Text("Einstellung") })
@@ -444,7 +452,7 @@ private fun java.io.InputStream.readBytesLimited(): ByteArray {
                         Spacer(Modifier.height(22.dp))
                         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                             Metric(d.entries.count { it.status != "Erledigt" }.toString(), "Offen")
-                            Metric(d.entries.count { it.priority == "Dringend" && it.status != "Erledigt" }.toString(), "Dringend", Amber)
+                            Metric(d.entries.count { it.priority == "Dringend" && it.status != "Erledigt" }.toString(), "Dringend", Critical)
                             Metric(d.assets.size.toString(), "Anlagen")
                         }
                     }
@@ -462,13 +470,13 @@ private fun java.io.InputStream.readBytesLimited(): ByteArray {
                     if (due.isNotEmpty()) {
                         Section("Wartungen im Blick")
                         due.take(5).forEach { a -> Panel {
-                            Text(a.name, fontWeight = FontWeight.Bold); Text("${serviceState(a.nextService)} · ${a.nextService}", color = Amber)
+                            Text(a.name, fontWeight = FontWeight.Bold); StatusBadge("${serviceState(a.nextService)} · ${a.nextService}", serviceTone(serviceState(a.nextService)))
                             TextButton(onClick = { selectedAssetId = a.id; page = 1 }) { Text("Anlagenakte öffnen") }
                         } }
                     }
                     val upcoming = d.work.appointments.flatMap { occurrences(it, java.time.LocalDate.now(), java.time.LocalDate.now().plusDays(7)) }.filter { it.status == "Geplant" && appointmentTime(it.start)?.toLocalDate()?.let { date -> date >= java.time.LocalDate.now() && date <= java.time.LocalDate.now().plusDays(7) } == true }.sortedBy { appointmentTime(it.start) }
                     if (upcoming.isNotEmpty()) { Section("Termine der nächsten 7 Tage"); upcoming.take(3).forEach { e -> Panel {
-                        Text(e.title, fontWeight = FontWeight.Bold); Text("${e.start} · ${e.company}", color = Mint)
+                        Text(e.title, fontWeight = FontWeight.Bold); Text("${e.start} · ${e.company}", color = Muted)
                         TextButton(onClick = { page = 4; tool = "Kalender" }) { Text("Kalender öffnen") }
                     } } }
                     val dueWork = dueEntries(d, java.time.LocalDate.now().plusDays(7))
@@ -515,7 +523,7 @@ private fun java.io.InputStream.readBytesLimited(): ByteArray {
                                         Text("${if (a.favorite) "★ " else ""}${a.name}", fontWeight = FontWeight.Bold, maxLines = 2)
                                         Text(listOf(a.tag, a.trade, a.location).filter { it.isNotBlank() }.joinToString(" · "), color = Muted, fontSize = 12.sp, maxLines = 2)
                                         val count = d.entries.count { it.assetId == a.id && it.status != "Erledigt" }
-                                        if (count > 0 || a.nextService.isNotBlank()) Text("$count offen" + if (a.nextService.isNotBlank()) " · Wartung ${a.nextService}" else "", color = if (serviceState(a.nextService) == "Überfällig") Amber else Mint, fontSize = 12.sp)
+                                        if (count > 0 || a.nextService.isNotBlank()) Text("$count offen" + if (a.nextService.isNotBlank()) " · Wartung ${a.nextService}" else "", color = statusColor(serviceTone(serviceState(a.nextService))), fontSize = 12.sp)
                                     }
                                     Icon(Icons.Outlined.ChevronRight, "Anlagenakte öffnen")
                                 }
@@ -539,11 +547,11 @@ private fun java.io.InputStream.readBytesLimited(): ByteArray {
                         val list = d.readings.filter { "${it.label} ${assetName(d, it.assetId)}".contains(query, true) }.sortedByDescending { it.created }
                         if (list.isEmpty()) Hint("Noch keine passenden Messwerte. Es werden keine Grenzwerte oder automatischen Sicherheitsbewertungen angenommen.")
                         PagedRecords(list, query, { it.id }) { r -> Panel {
-                            Text(assetName(d, r.assetId), color = Mint, fontSize = 12.sp); Text(r.label, fontWeight = FontWeight.Bold)
+                            Text(assetName(d, r.assetId), color = Muted, fontSize = 12.sp); Text(r.label, fontWeight = FontWeight.Bold)
                             Text("${r.value} ${r.unit}", fontSize = 28.sp); Text(stamp(r.created), color = Muted, fontSize = 12.sp)
                             if (r.note.isNotBlank()) Text(r.note)
                             TextButton(onClick = { editReading = r; dialog = "reading" }, enabled = !model.busy) { Text("Messwert korrigieren") }
-                            TextButton(onClick = { removal = "reading" to r.id }, enabled = !model.busy) { Text("Messwert löschen") }
+                            TextButton(onClick = { removal = "reading" to r.id }, enabled = !model.busy) { Text("Messwert löschen", color = MaterialTheme.colorScheme.error) }
                         } }
                     }
                 }
@@ -552,12 +560,12 @@ private fun java.io.InputStream.readBytesLimited(): ByteArray {
                     Button(onClick = { editRound = null; dialog = "round" }, enabled = !model.busy) { Text("+ Checkliste erstellen") }
                     PagedRecords(d.rounds, "rounds", { it.id }) { r -> Panel { Text(r.title, fontSize = 21.sp, fontWeight = FontWeight.Bold); Text("${r.checks.size} Prüfpunkte", color = Muted)
                         Button(onClick = { run = r }, enabled = !model.busy) { Text("Rundgang starten") }
-                        Row { TextButton(onClick = { editRound = r; dialog = "round" }, enabled = !model.busy) { Text("Bearbeiten") }; TextButton(onClick = { removal = "round" to r.id }, enabled = !model.busy) { Text("Löschen") } } } }
+                        Row { TextButton(onClick = { editRound = r; dialog = "round" }, enabled = !model.busy) { Text("Bearbeiten") }; TextButton(onClick = { removal = "round" to r.id }, enabled = !model.busy) { Text("Löschen", color = MaterialTheme.colorScheme.error) } } } }
                     Section("Abgeschlossene Rundgänge")
                     if (d.runs.isEmpty()) Hint("Noch kein Rundgang dokumentiert.")
                     PagedRecords(d.runs.sortedByDescending { it.created }, "runs", { it.id }) { r -> Panel { Text(r.title, fontWeight = FontWeight.Bold); Text(stamp(r.created), color = Muted)
                         r.results.forEach { Text(it, modifier = Modifier.padding(top = 6.dp)) }; if (r.note.isNotBlank()) Text(r.note)
-                        TextButton(onClick = { removal = "run" to r.id }, enabled = !model.busy) { Text("Protokoll löschen") }
+                        TextButton(onClick = { removal = "run" to r.id }, enabled = !model.busy) { Text("Protokoll löschen", color = MaterialTheme.colorScheme.error) }
                     } }
                 }
                 4 -> {
@@ -573,12 +581,13 @@ private fun java.io.InputStream.readBytesLimited(): ByteArray {
                     }
                 }
                 5 -> {
+                    AppearancePanel(appearance, model.busy) { model.error = it }
                     val lastBackup = context.getSharedPreferences("backup", 0).getLong("lastBackup", 0)
                     if (System.currentTimeMillis() - lastBackup > 7L * 86400000) Hint("Sicherung fällig: Seit mindestens sieben Tagen keine vollständige Sicherung exportiert.")
                     ProfilePanel(d, model.busy, saveData, onPhoto)
                     TradeSettings(d, model.busy, saveData)
                     Panel { Text("Dein Datentresor", fontSize = 23.sp, fontWeight = FontWeight.Bold)
-                        Text("Lokal verschlüsselt · Ohne Internetberechtigung", color = Mint)
+                        Text("Lokal verschlüsselt · Ohne Internetberechtigung", color = Accent)
                         Text("${imageValues(d).count { it.isNotEmpty() }} / $MAX_IMAGES Bilder · ${model.storageBytes() / (1024 * 1024)} MiB belegt")
                         Hint("Bilder separat verschlüsselt, bis 512 KiB pro Bild. Textdaten bis 32 MiB. Sicherungen enthalten alle Bilder.")
                         Text("Beim normalen Verlassen wird die App gesperrt. Bei Dateiauswahl und Kollegenaustausch sind App-Wechsel bis zu 2 Minuten möglich. Bildschirm aus oder manuelles Sperren sperrt sofort. Screenshots sind blockiert. Ein verlorenes Passwort lässt sich nicht zurücksetzen.", modifier = Modifier.padding(top = 12.dp)) }
@@ -593,7 +602,7 @@ private fun java.io.InputStream.readBytesLimited(): ByteArray {
                     Hint("WerkLog dokumentiert Beobachtungen und Tätigkeiten. Freigaben, Betriebsanweisungen und eure offiziellen Meldewege bleiben maßgeblich. Keine Anlagensteuerung oder Verbindung zur GLT.")
                     OutlinedButton(onClick = { dialog = "password" }, enabled = !model.busy, modifier = Modifier.fillMaxWidth()) { Text("App-Passwort ändern") }
                     OutlinedButton(onClick = { tour = 0; page = 0 }, modifier = Modifier.fillMaxWidth()) { Text("Kurze App-Führung starten") }
-                    Text("WERKLOG 0.6.1 · KOTLIN / ANDROID", color = Muted, fontSize = 11.sp)
+                    Text("WERKLOG 0.7.0 · KOTLIN / ANDROID", color = Muted, fontSize = 11.sp)
                 }
             }
             Spacer(Modifier.height(24.dp))
@@ -631,21 +640,21 @@ private fun java.io.InputStream.readBytesLimited(): ByteArray {
     run?.let { r -> RoundRunner(r, { run = null }) { result -> model.update(d.copy(runs = d.runs.filterNot { it.id == result.id } + result)) { run = null } } }
     mail?.let { m -> AlertDialog(onDismissRequest = { mail = null }, title = { Text("E-Mail-Vorschau") }, text = {
         Column(Modifier.heightIn(max = 450.dp).verticalScroll(rememberScrollState())) {
-            Text("Der folgende Text wird unverschlüsselt an deine E-Mail-App übergeben. Empfänger und Versand bestimmst du dort.", color = Amber)
+            Text("Der folgende Text wird unverschlüsselt an deine E-Mail-App übergeben. Empfänger und Versand bestimmst du dort.", color = Warning)
             Text(m.second, modifier = Modifier.padding(top = 16.dp))
         }
     }, confirmButton = { TextButton(onClick = { mail = null; onShare(m.first, m.second) }) { Text("E-Mail-App öffnen") } }, dismissButton = { TextButton(onClick = { mail = null }) { Text("Abbrechen") } }) }
     }
 }
 
-@Composable private fun Metric(value: String, label: String, color: Color = Mint) { Column { Text(value, fontSize = 36.sp, color = color, fontWeight = FontWeight.Bold); Text(label, color = Muted, fontSize = 13.sp) } }
-@Composable internal fun Panel(content: @Composable ColumnScope.() -> Unit) { Card(Modifier.fillMaxWidth().padding(bottom = 12.dp), colors = CardDefaults.cardColors(containerColor = WerkColors.surface)) { Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(4.dp), content = content) } }
+@Composable private fun Metric(value: String, label: String, color: Color = Color.Unspecified) { Column { Text(value, fontSize = 36.sp, color = if (color == Color.Unspecified) MaterialTheme.colorScheme.onSurface else color, fontWeight = FontWeight.Bold); Text(label, color = Muted, fontSize = 13.sp) } }
+@Composable internal fun Panel(content: @Composable ColumnScope.() -> Unit) { Card(Modifier.fillMaxWidth().padding(bottom = 12.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface, contentColor = MaterialTheme.colorScheme.onSurface), border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)) { Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(4.dp), content = content) } }
 @Composable internal fun Section(title: String) { Text(title, fontSize = 18.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 22.dp, bottom = 12.dp)) }
 @Composable internal fun Hint(text: String) { Text(text, color = Muted, fontSize = 14.sp, modifier = Modifier.padding(vertical = 12.dp)) }
 @Composable private fun Empty(title: String, body: String, click: () -> Unit) { Panel { Text(title, fontWeight = FontWeight.Bold); Hint(body); TextButton(onClick = click) { Text("Erste Anlage anlegen") } } }
 @Composable internal fun EntryCard(e: Entry, d: Data, click: () -> Unit) { Panel {
-    Text("${e.priority.uppercase()}  ·  ${e.status}", color = if (e.priority == "Dringend") Amber else Mint, fontSize = 11.sp)
-    if (e.dueDate.isNotBlank()) Text("Fällig: ${e.dueDate}" + if (entryOverdue(e)) " · Überfällig" else "", color = if (entryOverdue(e)) Amber else Mint, fontSize = 12.sp)
+    StatusBadge("${e.priority.uppercase()} · ${e.status}", entryTone(e.status, e.priority, entryOverdue(e)))
+    if (e.dueDate.isNotBlank()) Text("Fällig: ${e.dueDate}" + if (entryOverdue(e)) " · Überfällig" else "", color = if (entryOverdue(e)) Critical else Muted, fontSize = 12.sp)
     Text(e.title, fontSize = 20.sp, fontWeight = FontWeight.Bold); Text(assetName(d, e.assetId), color = Muted)
     if (e.note.isNotBlank()) Text(e.note, maxLines = 3)
     Text(stamp(e.updated), fontSize = 11.sp, color = Muted); TextButton(onClick = click) { Text("Öffnen & bearbeiten") }
@@ -696,7 +705,7 @@ private fun java.io.InputStream.readBytesLimited(): ByteArray {
         Field(note, { note = it }, "Beobachtung, Maßnahmen, nächste Schritte", 4); Text("Priorität"); Choices(priorities, priority) { priority = it }
         Text("Status"); Choices(statuses, status) { status = it }; Field(minutes, { minutes = it }, "Zeitaufwand in Minuten", numeric = true)
         Field(dueDate, { dueDate = it }, "Fällig bis (TT.MM.JJJJ, optional)")
-        if (dueDate.isNotBlank() && parseServiceDate(dueDate) == null) Text("Bitte ein gültiges Datum eingeben.", color = Amber)
+        if (dueDate.isNotBlank() && parseServiceDate(dueDate) == null) Text("Bitte ein gültiges Datum eingeben.", color = Critical)
         LinkChoices("Passende Anleitungen", data.work.guides.map { it.id to it.title }, guideIds) { guideIds = it }
         data.work.guides.filter { it.id in guideIds || (it.assetId == asset && asset.isNotBlank()) }.forEach { g ->
             val open = LocalRecordLink.current

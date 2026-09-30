@@ -70,7 +70,7 @@ val LocalRecordLink = staticCompositionLocalOf<(String, String) -> Unit> { { _, 
             if (contact.phone.isNotBlank()) TextButton(onClick = { activity?.contactAction(contact, false) }) { Text("Nummer wählen") }
             if (contact.email.isNotBlank()) TextButton(onClick = { activity?.contactAction(contact, true) }) { Text("E-Mail vorbereiten") }
             TextButton(onClick = { editing = true }, enabled = !busy) { Text("Kontakt bearbeiten / Zuordnungen") }
-            TextButton(onClick = { deleting = true }, enabled = !busy) { Text("Kontakt löschen") }
+            TextButton(onClick = { deleting = true }, enabled = !busy) { Text("Kontakt löschen", color = MaterialTheme.colorScheme.error) }
         }
         Section("Zugeordnete Anlagen")
         d.assets.filter { it.id in contact.assetIds }.forEach { RecordLink("Anlagen", it.id, "${it.tag} ${it.name}".trim()) }
@@ -106,7 +106,7 @@ val LocalRecordLink = staticCompositionLocalOf<(String, String) -> Unit> { { _, 
         availableTrades(d).forEach { trade ->
             Text(trade, fontWeight = FontWeight.Bold)
             Row { TextButton(onClick = { old = trade; editing = true }, enabled = !busy) { Text("Umbenennen") }
-                TextButton(onClick = { remove = trade }, enabled = !busy && availableTrades(d).size > 1) { Text("Löschen / zuordnen") } }
+                TextButton(onClick = { remove = trade }, enabled = !busy && availableTrades(d).size > 1) { Text("Löschen / zuordnen", color = MaterialTheme.colorScheme.error) } }
         }
     }
     if (editing) {
@@ -118,7 +118,7 @@ val LocalRecordLink = staticCompositionLocalOf<(String, String) -> Unit> { { _, 
     remove?.let { trade ->
         var replacement by rememberSaveable { mutableStateOf(availableTrades(d).first { it != trade }) }
         Form("Gewerk löschen", !busy, { remove = null }, { save(renameTrade(d, trade, replacement)) { remove = null } }, confirmLabel = "Löschen & zuordnen") {
-            Text("$trade entfernen. Betroffene Anlagen und Textvorlagen werden diesem Gewerk zugeordnet:")
+            Text("$trade entfernen. Betroffene Anlagen und Textvorlagen werden diesem Gewerk zugeordnet:", color = MaterialTheme.colorScheme.error)
             Picker("Ersatzgewerk", availableTrades(d).filterNot { it == trade }.map { it to it }, replacement) { replacement = it }
         }
     }
