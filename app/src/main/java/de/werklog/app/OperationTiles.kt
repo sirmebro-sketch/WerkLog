@@ -68,11 +68,11 @@ private val operationTiles = listOf(
                                 Icon(tile.icon, null, tint = Mint, modifier = Modifier.size(30.dp))
                                 Spacer(Modifier.height(8.dp))
                                 Box(Modifier.fillMaxWidth().height(titleHeight), contentAlignment = Alignment.Center) {
-                                    Text(tile.name, style = titleStyle)
+                                    Text(tile.name, style = titleStyle, modifier = Modifier.fillMaxWidth())
                                 }
                                 Spacer(Modifier.height(4.dp))
                                 Box(Modifier.fillMaxWidth().height(hintHeight), contentAlignment = Alignment.Center) {
-                                    Text(tile.hint, style = hintStyle, color = Muted)
+                                    Text(tile.hint, style = hintStyle, color = Muted, modifier = Modifier.fillMaxWidth())
                                 }
                             }
                         }
