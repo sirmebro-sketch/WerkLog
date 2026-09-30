@@ -50,8 +50,8 @@ private val operationTiles = listOf(
         val hintStyle = MaterialTheme.typography.bodySmall.copy(textAlign = TextAlign.Center)
         val titlePixels = operationTiles.maxOf { measurer.measure(it.name, style = titleStyle, constraints = Constraints(maxWidth = textWidth)).size.height }
         val hintPixels = operationTiles.maxOf { measurer.measure(it.hint, style = hintStyle, constraints = Constraints(maxWidth = textWidth)).size.height }
-        val titleHeight = with(density) { titlePixels.toDp() }
-        val hintHeight = with(density) { hintPixels.toDp() }
+        val titleHeight = with(density) { titlePixels.toDp() + 2.dp }
+        val hintHeight = with(density) { hintPixels.toDp() + 2.dp }
         val height = (24.dp + 30.dp + 8.dp + titleHeight + 4.dp + hintHeight).coerceAtLeast(112.dp)
         Column(verticalArrangement = Arrangement.spacedBy(gap)) {
             operationTiles.chunked(columns).forEach { row ->

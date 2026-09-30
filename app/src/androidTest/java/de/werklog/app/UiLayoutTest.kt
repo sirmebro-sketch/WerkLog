@@ -54,7 +54,7 @@ class UiLayoutTest {
                     val layouts = mutableListOf<TextLayoutResult>()
                     ui.onNodeWithText(text, useUnmergedTree = true).assertIsDisplayed()
                         .performSemanticsAction(SemanticsActions.GetTextLayoutResult) { action -> action(layouts) }
-                    assertFalse("Clipped label: $text / $scale", layouts.single().hasVisualOverflow)
+                    assertFalse("Clipped label: $text / $scale / ${layouts.single().size} / ${layouts.single().multiParagraph.height}", layouts.single().hasVisualOverflow)
                 }
                 tile.performClick()
                 ui.runOnIdle { assertEquals(name, opened) }

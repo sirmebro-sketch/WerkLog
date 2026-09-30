@@ -73,7 +73,7 @@ class NavigationTest {
             ui.onNodeWithContentDescription("App sperren").assertIsDisplayed().performClick()
             ui.waitUntil(10000) { ui.onAllNodesWithText("Passwort", substring = false).fetchSemanticsNodes().isNotEmpty() }
             ui.onNodeWithText("Passwort", substring = false).performTextInput("NeuesPasswort2026")
-            ui.onNodeWithText("Entsperren", substring = false).performClick()
+            ui.onNodeWithText("Passwort", substring = false).performImeAction()
             ui.waitUntil(60000) { ui.onAllNodesWithText("Profil bearbeiten").fetchSemanticsNodes().isNotEmpty() }
             ui.onNodeWithText("Heute", useUnmergedTree = true).performClick()
             ui.onNodeWithText("Hallo, Alex Test.").assertExists()
@@ -143,7 +143,7 @@ class NavigationTest {
             ui.waitUntil(10000) { ui.onAllNodesWithText("Passwort", substring = false).fetchSemanticsNodes().isNotEmpty() }
             ui.onAllNodesWithText("Unfertiger Prüfschritt").assertCountEquals(0)
             ui.onNodeWithText("Passwort", substring = false).performTextInput("NeuesPasswort2026")
-            ui.onNodeWithText("Entsperren", substring = false).performClick()
+            ui.onNodeWithText("Passwort", substring = false).performImeAction()
             ui.waitUntil(60000) { ui.onAllNodesWithText("Unfertiger Prüfschritt").fetchSemanticsNodes().isNotEmpty() }
             ui.onNodeWithText("Notiz bleibt beim Sperren erhalten").assertExists()
             org.junit.Assert.assertEquals(2, scenarioModel.data!!.work.guides.last().steps.size)
@@ -193,7 +193,7 @@ class NavigationTest {
             scenario.moveToState(androidx.lifecycle.Lifecycle.State.CREATED)
             scenario.recreate(); scenario.moveToState(androidx.lifecycle.Lifecycle.State.RESUMED)
             ui.onNodeWithText("Passwort", substring = false).performTextInput("NeuesPasswort2026")
-            ui.onNodeWithText("Entsperren", substring = false).performClick()
+            ui.onNodeWithText("Passwort", substring = false).performImeAction()
             ui.waitUntil(60000) { ui.onAllNodesWithText("Anleitungseinstellungen").fetchSemanticsNodes().isNotEmpty() }
             ui.onNodeWithContentDescription("Zurück").performClick()
             ui.onNodeWithText("Geprüfter Rücksprung mit Formular").assertExists()

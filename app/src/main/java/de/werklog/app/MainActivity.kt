@@ -21,6 +21,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.*
@@ -32,6 +33,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -290,6 +292,10 @@ private fun java.io.InputStream.readBytesLimited(): ByteArray {
     var password by remember { mutableStateOf("") }; var repeat by remember { mutableStateOf("") }
     var confirmed by remember(backup) { mutableStateOf(false) }
     val creating = !model.exists && backup == null
+    val canUnlock = !model.busy && password.isNotEmpty() && (!creating || (password.length >= 10 && password == repeat)) && (backup == null || !model.exists || confirmed)
+    fun submitPassword() {
+        if (canUnlock) { model.unlock(password.toCharArray(), backup); password = ""; repeat = ""; cancelRestore() }
+    }
     val lockActivity = androidx.compose.ui.platform.LocalContext.current as MainActivity
     LaunchedEffect(model.session, backup, model.busy, model.error) { if (!creating) lockActivity.requestAutoBiometric() }
     Column(Modifier.fillMaxSize().safeDrawingPadding().verticalScroll(rememberScrollState()).padding(28.dp), verticalArrangement = Arrangement.Center) {
@@ -302,14 +308,15 @@ private fun java.io.InputStream.readBytesLimited(): ByteArray {
             else if (backup != null) "Gib das Passwort dieser Sicherung ein. Eine Wiederherstellung ersetzt alle aktuellen Daten."
             else "Deine Daten bleiben verschlüsselt auf diesem Gerät.", color = Muted, modifier = Modifier.padding(vertical = 12.dp))
         OutlinedTextField(password, { password = it }, label = { Text("Passwort") }, visualTransformation = PasswordVisualTransformation(), singleLine = true,
-            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password), modifier = Modifier.fillMaxWidth(), enabled = !model.busy)
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password, imeAction = if (creating) ImeAction.Next else ImeAction.Done),
+            keyboardActions = KeyboardActions(onDone = { submitPassword() }), modifier = Modifier.fillMaxWidth(), enabled = !model.busy)
         if (creating) OutlinedTextField(repeat, { repeat = it }, label = { Text("Passwort wiederholen") }, visualTransformation = PasswordVisualTransformation(), singleLine = true,
-            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password), modifier = Modifier.fillMaxWidth().padding(top = 12.dp))
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password, imeAction = ImeAction.Done),
+            keyboardActions = KeyboardActions(onDone = { submitPassword() }), modifier = Modifier.fillMaxWidth().padding(top = 12.dp), enabled = !model.busy)
         if (backup != null && model.exists) Row(verticalAlignment = Alignment.CenterVertically) {
             Checkbox(confirmed, { confirmed = it }); Text("Aktuelle Daten durch diese Sicherung ersetzen", modifier = Modifier.weight(1f))
         }
-        Button(onClick = { model.unlock(password.toCharArray(), backup); password = ""; repeat = ""; cancelRestore() },
-            enabled = !model.busy && password.isNotEmpty() && (!creating || (password.length >= 10 && password == repeat)) && (backup == null || !model.exists || confirmed),
+        Button(onClick = { submitPassword() }, enabled = canUnlock,
             modifier = Modifier.fillMaxWidth().padding(top = 24.dp).heightIn(min = 52.dp)) {
             Text(if (model.busy) "Tresor wird geöffnet …" else if (creating) "Tresor erstellen" else "Entsperren")
         }
