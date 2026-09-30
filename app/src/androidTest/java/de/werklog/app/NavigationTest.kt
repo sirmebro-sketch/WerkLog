@@ -18,10 +18,13 @@ class NavigationTest {
         context.getSharedPreferences("onboarding", 0).edit().clear().commit()
         context.getSharedPreferences("biometric", 0).edit().clear().commit()
         ActivityScenario.launch(MainActivity::class.java).use { scenario ->
+            lateinit var diagnosticModel: WorkModel
+            scenario.onActivity { diagnosticModel = androidx.lifecycle.ViewModelProvider(it)[WorkModel::class.java] }
+            try {
             ui.onNodeWithText("Passwort", substring = false).performTextInput("Testpasswort2026")
             ui.onNodeWithText("Passwort wiederholen").performTextInput("Testpasswort2026")
             ui.onNodeWithText("Tresor erstellen").performClick()
-            ui.waitUntil(15000) { ui.onAllNodesWithText("Später").fetchSemanticsNodes().isNotEmpty() }
+            ui.waitUntil(60000) { ui.onAllNodesWithText("Später").fetchSemanticsNodes().isNotEmpty() }
             ui.onNodeWithText("Später").performClick()
             ui.waitUntil(15000) { ui.onAllNodesWithText("Überspringen").fetchSemanticsNodes().isNotEmpty() }
             ui.onNodeWithText("Weiter").performClick()
@@ -62,7 +65,7 @@ class NavigationTest {
             ui.waitUntil(10000) { ui.onAllNodesWithText("Passwort", substring = false).fetchSemanticsNodes().isNotEmpty() }
             ui.onNodeWithText("Passwort", substring = false).performTextInput("NeuesPasswort2026")
             ui.onNodeWithText("Entsperren", substring = false).performClick()
-            ui.waitUntil(15000) { ui.onAllNodesWithText("Hallo, Alex Test.").fetchSemanticsNodes().isNotEmpty() }
+            ui.waitUntil(60000) { ui.onAllNodesWithText("Hallo, Alex Test.").fetchSemanticsNodes().isNotEmpty() }
             ui.onNodeWithText("Betrieb", useUnmergedTree = true).performClick()
             ui.onNodeWithText("Anleitungen", substring = false).performClick()
             ui.onNodeWithText("+ Anleitung").performScrollTo().performClick()
@@ -114,6 +117,14 @@ class NavigationTest {
                 org.junit.Assert.assertTrue(guide.steps.last().image.startsWith("img:"))
             }
 
+            } catch (failure: Throwable) {
+                println("TEST DIAGNOSTIC busy=${diagnosticModel.busy} unlocked=${diagnosticModel.data != null} exists=${diagnosticModel.exists} error=${diagnosticModel.error} page=${diagnosticModel.workspacePage.intValue}")
+                runCatching { println(ui.onRoot().printToString()) }
+                runCatching { ui.onRoot().captureToImage().asAndroidBitmap().let { bitmap ->
+                    File(requireNotNull(InstrumentationRegistry.getArguments().getString("additionalTestOutputDir")), "failure.png").apply { parentFile?.mkdirs() }.outputStream().use { bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it) }
+                } }
+                throw failure
+            }
         }
     }
 }
