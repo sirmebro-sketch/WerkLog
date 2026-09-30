@@ -152,3 +152,26 @@ APK `WerkLog-0.4.2-Test.apk`, SHA-256 `faa198f813930df7147d07351c447cd4d7430fac7
 Ergebnis 30.09.2026: 49 JVM-Tests, Lint und Prüfung der gepackten Netzwerkberechtigungen erfolgreich ([Build](https://github.com/sirmebro-sketch/WerkLog/actions/runs/36726158921)). Beide Instrumentierungstests erfolgreich ([Emulator](https://github.com/sirmebro-sketch/WerkLog/actions/runs/36726159176)). Der Kontakt-Test scrollt vor dem Klick zum eindeutig beschrifteten Kontrollkästchen und prüft dessen ausgewählten Zustand. Reale Fingerabdruck-, Kamera-, Zähler-OCR- und Mail-Abnahme bleiben Geräteaufgaben.
 
 APK `WerkLog-0.5.0-Test.apk`, SHA-256 `de508d7c9b74a760ad262dcf89247deab5ee71c71147096b1bc3a0881afc0c83`. Vor Installation offene Formulare speichern und vollständige Sicherung exportieren. Stabile Release-Signierung ist weiterhin offen; eine erforderliche Neuinstallation löscht lokale Daten.
+
+
+## Abnahme 0.6.0 — Gesamtprüfung
+
+54 JVM-Tests, Lint, APK-Berechtigungsprüfung und zwei Android-15-Instrumentierungstests erfolgreich am 30.09.2026. [Build](https://github.com/sirmebro-sketch/WerkLog/actions/runs/36733266485), [Emulator](https://github.com/sirmebro-sketch/WerkLog/actions/runs/36733266511).
+
+Neue belegte Prüffälle:
+- Metadaten-Dateischreiben gezielt blockiert: bestehende Anlage unverändert, Editor und eingegebener neuer Name erhalten; nach Behebung erneut erfolgreich gespeichert.
+- Kollegenarchiv mit echtem JPEG-Titelbild durch den produktiven WorkModel importiert: lokaler `img:`-Bezug vorhanden, entschlüsselte Bildbytes identisch.
+- Neue verschlüsselte Bilddateien bei gescheitertem Metadaten-Commit entfernt, alter Tresor weiter lesbar.
+- Fachtests für Fälligkeiten, Lieferstatus, Hierarchiezyklen, fehlende Verknüpfungen, lange QR-Kennzeichen und Terminserien ab 1900.
+- Bestehende 500-Bilder-Sicherungsprüfung, Passwortwechsel, Formularwiederaufnahme, Kamerarückgabe, Bestellungen und Kontakte weiter erfolgreich.
+- Betrieb, Führung und Adressbuch visuell anhand aktueller Emulatoraufnahmen geprüft.
+
+Zusätzliche Gerätechecks:
+- [ ] Fälligkeit bei Tätigkeit setzen; Heute und „Fällig“-Filter prüfen; Erledigt entfernt sie aus der fälligen Übersicht.
+- [ ] Lieferung mit Status Bestellt/Teilgeliefert und Datum prüfen; Geliefert/Abgesagt verschwindet aus Heute.
+- [ ] Über 40 Anlagen/Anleitungen/Bestellungen: Suchtreffer außerhalb des ersten Abschnitts finden, weitere anzeigen, danach sperren/entsperren.
+- [ ] Kontakt mit Telefonnummer/E-Mail bewusst öffnen; keine Kommunikation ohne eigene Aktion in der externen App.
+- [ ] Kollegen-Titelbild importieren, in Vollbild öffnen, sperren/entsperren und Vollsicherung wiederherstellen.
+- [ ] Nach Restore Biometrie neu aktivieren; falsches Backup-Passwort verändert die bestehende Anlage nicht.
+
+APK `WerkLog-0.6.0-Test.apk`, SHA-256 `800cbd04c8fe99f47ddaa9c6d9af2ac2f3d358e8db39679b6b57c187dc9ecf9f`. App-Quellstand `40fd5ee2370e82ae02c35e6eb7d827671330d1db`. Vor einer möglichen Neuinstallation offene Formulare speichern und Vollsicherung exportieren. Geräteabhängige Kamera/OCR/Biometrie/Mail sowie stabile Release-Signatur bleiben offen.

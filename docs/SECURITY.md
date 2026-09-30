@@ -1,4 +1,4 @@
-# Lokaler Schutz — 0.4.0
+# Lokaler Schutz — 0.6.0
 
 ## Daten und Schlüssel
 
@@ -10,7 +10,7 @@ Metadaten höchstens 32 MiB. Bilder maximal 500 × 512 KiB, maximal 1920 Pixel n
 
 ## Sitzung und App-Wechsel
 
-Normalerweise Sperre in `onStop`. Während bewusster Dateiauswahl, Fotoaufnahme und Kollegenaustausch darf ein Hintergrundwechsel höchstens zwei Minuten dauern. Eine verzögerte Sperre und eine Fristprüfung bei Rückkehr decken auch verzögerte Timer ab. Datei-/Code-Eingabe bleibt in dieser kurzen Phase bedienbar. Bildschirm-aus-Ereignis, gesperrtes Gerät oder manueller Schlossknopf sperren sofort. Kein dauerhaftes Entsperren, keine Speicherung sensibler Formularzustände in SavedState. Ein Prozessneustart startet gesperrt. Beim normalen Start/Entsperren Heute öffnen.
+Normalerweise Sperre in `onStop`. Während bewusster Dateiauswahl, Fotoaufnahme und Kollegenaustausch darf ein Hintergrundwechsel höchstens zwei Minuten dauern. Eine verzögerte Sperre und eine Fristprüfung bei Rückkehr decken auch verzögerte Timer ab. Datei-/Code-Eingabe bleibt in dieser kurzen Phase bedienbar. Bildschirm-aus-Ereignis, gesperrtes Gerät oder manueller Schlossknopf sperren sofort. Kein dauerhaftes Entsperren, keine Speicherung sensibler Formularzustände in Android-SavedState. Ein Prozessneustart startet gesperrt. Nach Einrichtung/ohne vorherigen Entwurf startet Heute; nach einer Sperre wird der verschlüsselte Arbeitsstand wiederaufgenommen.
 
 FLAG_SECURE schützt Screenshots/Übersicht auf unterstützten Geräten. Während der Nutzung existieren entschlüsselte Daten im RAM; JVM-Strings lassen sich nicht zuverlässig vollständig überschreiben. Root, kompromittiertes Betriebssystem/App-Code/Tastatur liegen außerhalb des Schutzmodells. Keine Sicherheitszertifizierung behauptet.
 
@@ -22,15 +22,15 @@ Android-Dateiauswahl, Galerie, Kamera, Mail-App und Systemkalender sind externe 
 
 ## Bilder und E-Mail
 
-Zählerfotos werden nach Einlesen für OCR gelöscht, weder Foto noch vollständiger OCR-Text kommen ins Archiv. Werte müssen bestätigt werden. Kamera erzeugt vorübergehend eine Datei im engen Kamera-Cacheordner. Galerieimport kopiert maximal 64 MiB; das Original bleibt unverändert. Abbruch/Verarbeitung löscht Arbeitskopien, übrig gebliebene Kamera-Dateien werden beim Activity-Neustart entfernt. Prozessabbruch/Rotation kann deshalb eine neue Aufnahme nötig machen. Verhalten der externen Kamera ist gesondert auf dem Gerät zu testen.
+Zählerfotos bleiben nur zur vorübergehenden Bestätigung im privaten Kamera-Cache; bei Abschluss/Abbruch werden sie gelöscht. Weder Foto noch vollständiger OCR-Text kommen ins Archiv. Werte müssen bestätigt werden. Kamera erzeugt vorübergehend eine Datei im engen Kamera-Cacheordner. Galerieimport kopiert maximal 64 MiB; das Original bleibt unverändert. Abschluss/Abbruch löscht Arbeitskopien. Bei Activity-Neuerstellung bleiben gültige ausstehende Aufnahmen bis 15 Minuten wiederaufnehmbar; andere Kamera-Dateien werden bereinigt. Ohne wiederherstellbaren Instanzzustand kann eine neue Aufnahme nötig sein. Verhalten der externen Kamera ist gesondert auf dem Gerät zu testen.
 
 Gespeicherte Anleitungs-/Bestellbilder werden neu als JPEG komprimiert (EXIF entfällt), separat verschlüsselt und erst bei „Bild anzeigen“ geladen. Bestell-Mailentwürfe enthalten nach Vorschau unverschlüsselten Text und bewusst beigefügte Bilder. Keine Anlagen-IDs oder Zugangsdaten automatisch im Mailtext. Ein nicht exportierter ContentProvider gewährt URI-Leserechte für kurzlebige, zusätzlich verschlüsselte Anhangsdateien (bis 15 Minuten). Nur deren zufällige Schlüssel liegen im RAM, maximal vier Bilder werden gleichzeitig entschlüsselt. Keine Klartext-Mailbilder im Dateicache. Prozessende/Fristablauf kann erneute Übergabe erfordern; verwaiste verschlüsselte Dateien werden beim nächsten Start gelöscht. Die Mail-App kann übergebene Inhalte dauerhaft speichern.
 
 ## Sicherung und Kollegenaustausch
 
-ZIP-Dateien enthalten ausschließlich bereits verschlüsselte Metadaten/Bilder; Anzahl und Dateigrößen bleiben sichtbar. Stream-Verarbeitung, max. 384 MiB Container, enge Namen-/Anzahl-/Größenlimits, keine Verzeichnisse/Pfade. Alle benötigten Bild-Tags werden vor Aktivierung des Imports geprüft. Alte einzelne WRKLOG01-Backups bleiben lesbar. Neue Archive benötigen 0.4+.
+ZIP-Dateien enthalten ausschließlich bereits verschlüsselte Metadaten/Bilder; Anzahl und Dateigrößen bleiben sichtbar. Stream-Verarbeitung, max. 384 MiB Container, enge Namen-/Anzahl-/Größenlimits, keine Verzeichnisse/Pfade. Alle benötigten Bild-Tags werden vor Aktivierung des Imports geprüft. Alte einzelne WRKLOG01-Backups bleiben lesbar. Aktuelle Schema-7-Archive benötigen 0.6.0+.
 
-WRKSHR02-Anlagenfreigaben verwenden einen eigenen zufälligen 20-Zeichen-Code (rund 99 Bit), eigenen Salt und eigene Bildverschlüsselung. Kein App-Passwort in der Freigabe. Code nur auf dem Bildschirm, nicht in Datei/Dateiname/Message/Logs/Einstellungen. Datei und Code getrennt übergeben. Jede Person mit Datei und Code kann mit kompatibler Software entschlüsseln; keine App-exklusive Garantie, kein Widerruf exportierter Dateien, kein Beweis der Absenderidentität. WRKSHR01 lesbar.
+WRKSHR02-Anlagenfreigaben verwenden einen eigenen zufälligen 20-Zeichen-Code (rund 99 Bit), eigenen Salt und eigene Bildverschlüsselung. Kein App-Passwort in der Freigabe. Code nicht in der Freigabedatei, im Dateinamen, in der Begleitnachricht, in Logs oder Einstellungen. Während eines offenen Austauschdialogs kann der Code im separat verschlüsselten lokalen Formularentwurf zur Wiederaufnahme enthalten sein. Datei und Code getrennt übergeben. Jede Person mit Datei und Code kann mit kompatibler Software entschlüsseln; keine App-exklusive Garantie, kein Widerruf exportierter Dateien, kein Beweis der Absenderidentität. WRKSHR01 lesbar.
 
 Standardumfang Stammdaten, Wissen und Anleitungen; Passwörter/Historie nur ausdrücklich. Einzelner Wissenseintrag enthält nur Basis-Anlagenzuordnung. Empfänger sieht Inhalt vor Import, Passwörter maskiert. Neue lokale Anlagenkopie oder ausgewählte bestehende Anlage; vorhandene Inhalte standardmäßig erhalten, explizite Ersetzungswahl nötig. Herkunfts-IDs verhindern Wiederholungsduplikate. Keine automatische Löschung entfernter Senderdaten.
 
@@ -48,3 +48,10 @@ Dauerhafte Release-Signatur (RELEASE-SIGNING.md), erfolgreiche aktuelle CI und S
 ### Kamera und Bildansicht ab 0.4.2
 
 Ein Android-Konfigurationswechsel (z. B. Drehung) erhält die laufende Tresorsitzung. Ein echter Prozessneustart stellt keinen Schlüssel wieder her. Ausstehendes Bildziel und temporärer Dateiname werden in Androids Instanzzustand gesichert, ohne Passwort/Schlüssel. Kamera-Rohbilder liegen bis zur Bestätigung/Abbruch vorübergehend im privaten Cache; bei Wiederaufnahme nach Neuerstellung werden nur Dateien unter 15 Minuten akzeptiert, andere bei Appstart bereinigt. Bei Abschluss/Abbruch/Beenden werden sie entfernt. Meterfotos bleiben kein dauerhaftes Archiv. Die Vollbildansicht erzwingt ebenfalls FLAG_SECURE. Bildschirm aus/manuelles Sperren bleiben sofort wirksam; die bestehende Zwei-Minuten-Frist bei bewusster externer Übergabe bleibt bestehen.
+
+
+## Prüfung 0.6.0
+
+Masterpasswort-Felder werden ausschließlich im Arbeitsspeicher gehalten und nicht als Formularentwurf gespeichert. Geschäftliche Formularfelder bleiben dagegen verschlüsselt wiederaufnehmbar. Nach Wiederherstellung wird die alte biometrische Umhüllung gelöscht; nach Passwortwechsel/Wiederherstellung muss Biometrie neu aktiviert werden. Fehler beim Entfernen eines Keystore-Eintrags machen einen bereits erfolgreich umgeschlüsselten Tresor nicht wieder rückgängig.
+
+Formulare schließen erst nach erfolgreicher Speicherung. Neue Bilddateien werden bei fehlgeschlagener Speicherung entfernt, Importreste nach einem Fehler gegen den tatsächlich gespeicherten Bildbestand bereinigt. Bildvorschauen prüfen Dateigröße und Auflösung vor dem Dekodieren. Der Emulator prüft einen echten provozierten Dateisystemfehler und die lokale Übernahme eines importierten Anlagenbildes; das ist keine unabhängige Sicherheitszertifizierung. Weitere Prüfergebnisse: AUDIT-0.6.0.md.

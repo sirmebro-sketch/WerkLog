@@ -2,11 +2,19 @@
 
 Lokaler Android-Companion für Servicetechniker, in **Kotlin und Jetpack Compose**. Kein Konto, keine Internetberechtigung, keine Java-Quelldateien. Öffentlich ist der Quellcode; Arbeitsdaten liegen ausschließlich im verschlüsselten Gerätespeicher.
 
-## 0.5.0 — Testversion
+## 0.6.0 — Testversion nach Gesamtprüfung
+
+Neu: Fälligkeiten für Arbeiten/Störungen mit Anzeige in „Heute“, erwartete Lieferungen, Suchfelder für Anleitungen und Bestelllisten sowie Filter für offene/erledigte Bestellungen. Große Übersichten zeigen zunächst 40 Datensätze und laden weitere auf Wunsch nach; die Suche berücksichtigt alle Datensätze. Kontakte öffnen die Telefon- oder E-Mail-App ohne automatischen Anruf/Versand.
+
+Speicherfehler lassen Formulare und Eingaben offen. Fotos und Datensätze werden erst nach bestätigter Speicherung abgeschlossen. Kollegenimporte übernehmen Anlagenbilder vollständig in den eigenen Tresor; fehlgeschlagene Importe lassen sich erneut versuchen. Hierarchie, Verknüpfungen, Bildgrenzen, QR-Codes und lange Terminserien wurden zusätzlich abgesichert. Details und Prüfgrenzen: [Gesamtprüfung 0.6.0](docs/AUDIT-0.6.0.md).
+
+Offene Formulare vor Installation/Wechsel der App-Version speichern und eine verschlüsselte Vollsicherung erstellen. Neue Sicherungen und Anlagenpakete verwenden Schema 7 und benötigen auf Empfängerseite mindestens 0.6.0. Ältere Dateien bleiben lesbar.
+
+### Ergänzungen aus 0.5.0
 
 Neu: lokale Kontakte mit beidseitigen Anlagen-/Vorgangsbezügen, Anlagenbilder, kompakte gefilterte Anlagenliste und eigene Gewerke. Bestellungen aus Störungen starten mit leerer Teileliste und separaten editierbaren Grundinformationen. Anleitungen sind aus Anlage und Vorgang erreichbar. Entsperren stellt offene Formulare einschließlich Eingaben wieder her; eingerichtete Biometrie wird automatisch angeboten. Arbeitsprotokoll = Störungen und Arbeiten; Textvorlagen = wiederverwendbare Texte. Sicherungen liegen nur in Einstellungen.
 
-Entwürfe vor Gerätewechsel speichern; sie sind lokal verschlüsselt, aber nicht Teil des Sicherungsexports. Neue Anlagenfreigaben benötigen auf beiden Geräten mindestens 0.5.0.
+Entwürfe vor Gerätewechsel speichern; sie sind lokal verschlüsselt, aber nicht Teil des Sicherungsexports. Anlagenfreigaben aus 0.5.0 benötigen auf beiden Geräten mindestens 0.5.0.
 
 ### Ergänzungen aus 0.4.2
 
@@ -22,7 +30,7 @@ Drei Hauptpunkte: **Heute · Betrieb · Einstellung**. Betrieb ist der hervorgeh
 
 - Anlagenakten mit Kennzeichen, Hierarchie, Favoriten, Verlauf, Wissenseinträgen und lokalen Zugangsdaten; Bearbeiten/Löschen mit Bestätigung.
 - Suche über Anlagen, Wissen und Anleitungen; QR-Code je Anlage anzeigen/teilen oder offline fotografieren.
-- Tätigkeiten/Störungen, eigene Vorlagen, Duplizieren, Folgetermin und Teileanforderung direkt aus dem Vorgang.
+- Tätigkeiten/Störungen mit optionaler Fälligkeit, eigene Textvorlagen, Duplizieren, Folgetermin und Teileanforderung direkt aus dem Vorgang.
 - Zählerfoto-Texterkennung offline mit Bestätigung; kein gespeichertes Zählerfoto. Differenzen, Verlauf, eigene Prüfgrenzen und dokumentierter Zählerwechsel.
 - Eigene Rundgangsvorlagen bearbeiten/löschen, historische Protokolle erhalten.
 - Kalender mit Fremdfirma, Ansprechpartner, Zuständigkeit, Anlage, Wiederholungen und lokalen Erinnerungen. Einzelne Termine bewusst an den Systemkalender übergeben.
@@ -33,7 +41,7 @@ Drei Hauptpunkte: **Heute · Betrieb · Einstellung**. Betrieb ist der hervorgeh
 
 **32 MiB Metadaten plus bis zu 500 Bilder à 512 KiB** (etwa 250 MiB Bilder, abhängig von Kompression weniger). Bilder liegen einzeln AES-GCM-verschlüsselt; Textänderungen schreiben sie nicht erneut. Kamera-/Galeriebilder werden verkleinert, Metadaten entfernt. Ein ausgewähltes Galerie-Original bleibt außerhalb der App unverändert.
 
-Vollsicherungen und Kollegenaustausch werden bildweise verarbeitet (Container höchstens 384 MiB), sodass nicht alle Bilddaten zugleich im Speicher liegen. Alte Sicherungen lesbar; neue Archive benötigen 0.5.0. Speicherübersicht unter Einstellung, Erinnerung an fehlende Sicherung nach sieben Tagen.
+Vollsicherungen und Kollegenaustausch werden bildweise verarbeitet (Container höchstens 384 MiB), sodass nicht alle Bilddaten zugleich im Speicher liegen. Alte Sicherungen lesbar; aktuelle Archive benötigen 0.6.0. Speicherübersicht unter Einstellung, Erinnerung an fehlende Sicherung nach sieben Tagen.
 
 Lokales Passwort ändern verschlüsselt den gesamten Tresor neu. **Alte Sicherungen behalten ihr altes Passwort.** Starke Biometrie optional über Android Keystore. Beim gewöhnlichen Verlassen Sperre; Dateiauswahl/Kollegenaustausch erlauben Wechsel von maximal zwei Minuten. Bildschirm aus oder manuelle Sperre sperrt sofort. Kein Wiederherstellen eines vergessenen Passworts.
 
@@ -43,10 +51,11 @@ Anlage oder Wissenseintrag verschlüsselt mit separatem Zufallscode teilen; Pass
 
 ## Qualität und verbleibende Arbeit
 
-Am 30.09.2026 für 0.5.0 erfolgreich: [Android-Build mit 49 JVM-Tests, Lint und APK-Netzwerkprüfung](https://github.com/sirmebro-sketch/WerkLog/actions/runs/36726158921) und [Bedienablauf im Android-15-Emulator](https://github.com/sirmebro-sketch/WerkLog/actions/runs/36726159176). Der Emulator prüft Einrichtung, Anlagenbearbeitung, Profil, Passwortwechsel, Kamera-Rückgabe nach Activity-Neuerstellung, Bildansicht, verschlüsselte Formularwiederaufnahme nach Sperren, leere Bestellung aus einer Störung mit separatem Hintergrund, vorbelegte Anlagenzuordnung eines Teils und beidseitige Kontaktverknüpfungen. Ein zweiter Gerätetest prüft den verschlüsselten Entwurfs-Roundtrip einschließlich primitiver Compose-Zustände und Manipulationserkennung. Kamera, reale Zählererkennung, Biometrie und Mail-App müssen auf dem S24 Ultra erprobt werden. Keine produktive Gerätefreigabe behauptet.
+Am 30.09.2026 für 0.6.0 erfolgreich: [Android-Build mit 54 JVM-Tests, Lint und APK-Netzwerkprüfung](https://github.com/sirmebro-sketch/WerkLog/actions/runs/36733266485) und [zwei Android-15-Instrumentierungstests](https://github.com/sirmebro-sketch/WerkLog/actions/runs/36733266511). Der Bedienablauf prüft unter anderem einen provozierten Dateisystemfehler mit erhaltenem Formulartext, verschlüsselte Formularwiederaufnahme nach Sperren, Kamera-Rückgabe nach Activity-Neuerstellung, Passwortwechsel, Bestellungen aus Störungen, beidseitige Kontakte und den Import eines echten JPEG-Anlagenbildes durch den produktiven ViewModel-Pfad. Ansichten von Betrieb, Führung und Adressbuch wurden visuell geprüft. Kamera, reale Zählererkennung, Biometrie und Mail-App brauchen weiterhin die S24-Ultra-Abnahme.
 
-APK `WerkLog-0.5.0-Test.apk`, SHA-256 `de508d7c9b74a760ad262dcf89247deab5ee71c71147096b1bc3a0881afc0c83`. App-Quellstand: `cec8c6d7655076daf8a0c5fa709dc6782df0435f`.
+APK `WerkLog-0.6.0-Test.apk`, SHA-256 `800cbd04c8fe99f47ddaa9c6d9af2ac2f3d358e8db39679b6b57c187dc9ecf9f`. App-Quellstand: `40fd5ee2370e82ae02c35e6eb7d827671330d1db`.
 
+- [Gesamtprüfung und Verbesserungen 0.6.0](docs/AUDIT-0.6.0.md)
 - [Umsetzung und offene Punkte](docs/ROADMAP.md)
 - [Geräteabnahme](docs/DEVICE-TEST.md)
 - [Datenschutz und Sicherheitsgrenzen](docs/SECURITY.md)

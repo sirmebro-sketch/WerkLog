@@ -1,4 +1,16 @@
-# Stand 0.5.0 — Umsetzung und Grenzen
+# Stand 0.6.0 — Umsetzung und Grenzen
+
+## Gesamtprüfung 0.6.0
+
+- Speichern und Löschen schließen die zugehörigen Formulare erst nach einem erfolgreichen Schreibvorgang. Fehler lassen Eingaben zur Korrektur/erneuten Speicherung erhalten.
+- Bilddateien nach gescheiterten Schreibvorgängen werden aufgeräumt; ein neuer Kollegenimport übernimmt auch sein Titelbild in den lokalen Tresor. Importdatei und Code bleiben bei einem Fehler zur Wiederholung verfügbar.
+- Fälligkeitsdatum für Tätigkeiten/Störungen; überfällige und in sieben Tagen fällige Arbeiten sowie erwartete Lieferungen auf Heute. Filter „Fällig“ im Arbeitsprotokoll.
+- Suche über Anleitungen einschließlich Schrittexten; Bestellsuche über Artikel, Anlagen und Hintergrund, Filter offen/erledigt. Große Übersichten laden 40 Datensätze pro Abschnitt nach, Suche bleibt vollständig.
+- Adressbuch mit bewusstem Öffnen von Telefon-/E-Mail-App. Vorlagen bewahren ihr Gewerk; Elternauswahl schließt eigene Unteranlagen aus. Lange QR-Kennzeichen fallen sicher auf die Anlagen-ID zurück.
+- Datumsgestützte Terminserien bleiben auch bei sehr altem Startdatum erreichbar. Import-, Sicherungs- und Bilddialoge überstehen Activity-Neuerstellung besser; Bildvorschauen prüfen Auflösung vor Speicherallokation.
+- Wiederherstellung und Passwortwechsel löschen veraltete biometrische Schlüsselbindungen. Die Verschlüsselung und die Offline-Grenzen bleiben bestehen.
+
+Prüfbericht und aktuelle Ergebnisse: [AUDIT-0.6.0.md](AUDIT-0.6.0.md). Die nachfolgenden externen Voraussetzungen bleiben offen.
 
 ## Ergänzungen 0.4.2
 
