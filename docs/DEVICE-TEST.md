@@ -148,3 +148,7 @@ APK `WerkLog-0.4.2-Test.apk`, SHA-256 `faa198f813930df7147d07351c447cd4d7430fac7
 - Gewerke hinzufügen/umbenennen/löschen; Ersatzgewerk wählen, betroffene Anlagen prüfen.
 - Unfertigen Arbeitsschritt eingeben, App verlassen, Prozess/Activity neu erstellen und entsperren: Seite, Dialog, Schritt und Text erhalten. Danach bewusst speichern oder abbrechen.
 - Auf echter Hardware: eingerichtete Biometrie startet beim Entsperrbildschirm automatisch, Abbrechen erlaubt Passworteingabe ohne Prompt-Schleife.
+
+Ergebnis 30.09.2026: 49 JVM-Tests, Lint und Prüfung der gepackten Netzwerkberechtigungen erfolgreich ([Build](https://github.com/sirmebro-sketch/WerkLog/actions/runs/36726158921)). Beide Instrumentierungstests erfolgreich ([Emulator](https://github.com/sirmebro-sketch/WerkLog/actions/runs/36726159176)). Der Kontakt-Test scrollt vor dem Klick zum eindeutig beschrifteten Kontrollkästchen und prüft dessen ausgewählten Zustand. Reale Fingerabdruck-, Kamera-, Zähler-OCR- und Mail-Abnahme bleiben Geräteaufgaben.
+
+APK `WerkLog-0.5.0-Test.apk`, SHA-256 `de508d7c9b74a760ad262dcf89247deab5ee71c71147096b1bc3a0881afc0c83`. Vor Installation offene Formulare speichern und vollständige Sicherung exportieren. Stabile Release-Signierung ist weiterhin offen; eine erforderliche Neuinstallation löscht lokale Daten.

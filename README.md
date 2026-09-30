@@ -43,7 +43,9 @@ Anlage oder Wissenseintrag verschlüsselt mit separatem Zufallscode teilen; Pass
 
 ## Qualität und verbleibende Arbeit
 
-Am 30.09.2026 für 0.4.2 erfolgreich: [Android-Build mit 44 JVM-Tests, Lint und APK-Netzwerkprüfung](https://github.com/sirmebro-sketch/WerkLog/actions/runs/36665143563) und [erweiterter Bedienablauf im Android-15-Emulator](https://github.com/sirmebro-sketch/WerkLog/actions/runs/36665143503). Der Ablauf prüft auch eine simulierte Kamera-Rückgabe nach Hintergrundwechsel und Activity-Neuerstellung, korrekte Bildzuordnung zum zweiten Anleitungsschritt, Öffnen der Vollbildansicht und den festen Schritt-Knopf. Der unveränderte Swift-Kern wurde zuvor geprüft. Kamera, reale Zählererkennung, Biometrie und Mail-App müssen auf dem S24 Ultra erprobt werden. Keine produktive Gerätefreigabe behauptet.
+Am 30.09.2026 für 0.5.0 erfolgreich: [Android-Build mit 49 JVM-Tests, Lint und APK-Netzwerkprüfung](https://github.com/sirmebro-sketch/WerkLog/actions/runs/36726158921) und [Bedienablauf im Android-15-Emulator](https://github.com/sirmebro-sketch/WerkLog/actions/runs/36726159176). Der Emulator prüft Einrichtung, Anlagenbearbeitung, Profil, Passwortwechsel, Kamera-Rückgabe nach Activity-Neuerstellung, Bildansicht, verschlüsselte Formularwiederaufnahme nach Sperren, leere Bestellung aus einer Störung mit separatem Hintergrund, vorbelegte Anlagenzuordnung eines Teils und beidseitige Kontaktverknüpfungen. Ein zweiter Gerätetest prüft den verschlüsselten Entwurfs-Roundtrip einschließlich primitiver Compose-Zustände und Manipulationserkennung. Kamera, reale Zählererkennung, Biometrie und Mail-App müssen auf dem S24 Ultra erprobt werden. Keine produktive Gerätefreigabe behauptet.
+
+APK `WerkLog-0.5.0-Test.apk`, SHA-256 `de508d7c9b74a760ad262dcf89247deab5ee71c71147096b1bc3a0881afc0c83`. App-Quellstand: `cec8c6d7655076daf8a0c5fa709dc6782df0435f`.
 
 - [Umsetzung und offene Punkte](docs/ROADMAP.md)
 - [Geräteabnahme](docs/DEVICE-TEST.md)
