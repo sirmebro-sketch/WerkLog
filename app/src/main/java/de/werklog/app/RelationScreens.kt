@@ -14,7 +14,7 @@ import androidx.compose.ui.unit.dp
 val LocalRecordLink = staticCompositionLocalOf<(String, String) -> Unit> { { _, _ -> } }
 @Composable fun RecordLink(kind: String, id: String, label: String) {
     val open = LocalRecordLink.current
-    TextButton(onClick = { open(kind, id) }) { Text(label) }
+    TextButton(onClick = { open(kind, id) }, enabled = !LocalSaving.current) { Text(label) }
 }
 @Composable fun LinkChoices(label: String, options: List<Pair<String, String>>, chosen: List<String>, change: (List<String>) -> Unit) {
     var expanded by rememberSaveable { mutableStateOf(false) }
@@ -47,25 +47,22 @@ val LocalRecordLink = staticCompositionLocalOf<(String, String) -> Unit> { { _, 
         }
     }
 }
-@Composable fun ContactScreen(d: Data, busy: Boolean, save: DataSaver, initialId: String?, consumed: () -> Unit) {
-    var selected by rememberSaveable { mutableStateOf<String?>(null) }
+@Composable fun ContactScreen(d: Data, busy: Boolean, save: DataSaver, selected: String?, select: (String?) -> Unit) {
     var editing by rememberSaveable { mutableStateOf(false) }; var deleting by rememberSaveable { mutableStateOf(false) }
     var query by rememberSaveable { mutableStateOf("") }
-    LaunchedEffect(initialId) { if (initialId != null) { selected = initialId; consumed() } }
     val contact = d.contacts.find { it.id == selected }
     Section("Lokales Adressbuch")
     if (contact == null) {
         Field(query, { query = it }, "Name, Firma oder Aufgabe suchen")
-        Button(onClick = { selected = null; editing = true }, enabled = !busy) { Text("+ Kontakt") }
+        Button(onClick = { select(null); editing = true }, enabled = !busy) { Text("+ Kontakt") }
         val results = d.contacts.filter { listOf(it.name, it.company, it.role).any { s -> s.contains(query, true) } }.sortedBy { it.name.lowercase() }
         PagedRecords(results, query, { it.id }) { c ->
-            OutlinedButton(onClick = { selected = c.id }, modifier = Modifier.fillMaxWidth()) {
+            OutlinedButton(onClick = { select(c.id) }, modifier = Modifier.fillMaxWidth()) {
                 Column(Modifier.fillMaxWidth()) { Text(c.name, fontWeight = FontWeight.Bold); Text(listOf(c.company, c.role).filter(String::isNotBlank).joinToString(" · ")) }
             }
         }
         Hint("Verschlüsselt auf diesem Gerät. Kontakte werden nicht automatisch in Anlagenfreigaben oder Bestell-E-Mails übernommen.")
     } else {
-        TextButton(onClick = { selected = null }) { Text("‹ Alle Kontakte") }
         Panel {
             Text(contact.name, style = MaterialTheme.typography.headlineSmall)
             listOf(contact.company, contact.role, contact.phone, contact.email, contact.note).filter(String::isNotBlank).forEach { Text(it) }
@@ -81,7 +78,7 @@ val LocalRecordLink = staticCompositionLocalOf<(String, String) -> Unit> { { _, 
         d.entries.filter { it.id in contact.entryIds }.forEach { RecordLink("Vorgang", it.id, "${it.title} · ${it.status}") }
     }
     if (deleting && contact != null) ConfirmRemoval("Kontakt löschen?", "Entfernt die Person und ihre Zuordnungen. Anlagen und Arbeiten bleiben erhalten.", busy, { deleting = false }) {
-        save(d.copy(contacts = d.contacts.filterNot { it.id == contact.id })) { selected = null; deleting = false }
+        save(d.copy(contacts = d.contacts.filterNot { it.id == contact.id })) { select(null); deleting = false }
     }
     if (editing) {
         val recordId = rememberSaveable { contact?.id ?: newId() }
@@ -91,7 +88,7 @@ val LocalRecordLink = staticCompositionLocalOf<(String, String) -> Unit> { { _, 
         var assets by rememberSaveable { mutableStateOf(contact?.assetIds ?: emptyList<String>()) }; var entries by rememberSaveable { mutableStateOf(contact?.entryIds ?: emptyList<String>()) }
         Form("Kontakt", name.isNotBlank() && !busy, { editing = false }, {
             val next = Contact(recordId, name.trim(), company.trim(), role.trim(), phone.trim(), email.trim(), note.trim(), assets, entries)
-            save(d.copy(contacts = d.contacts.filterNot { it.id == next.id } + next)) { selected = next.id; editing = false }
+            save(d.copy(contacts = d.contacts.filterNot { it.id == next.id } + next)) { select(next.id); editing = false }
         }) {
             Field(name, { name = it }, "Name *"); Field(company, { company = it }, "Firma / Abteilung"); Field(role, { role = it }, "Aufgabe / Zuständigkeit")
             Field(phone, { phone = it }, "Telefon"); Field(email, { email = it }, "E-Mail"); Field(note, { note = it }, "Hinweise / Erreichbarkeit", 3)

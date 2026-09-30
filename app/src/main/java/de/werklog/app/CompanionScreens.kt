@@ -46,26 +46,6 @@ import androidx.compose.ui.unit.dp
     }
 }
 
-@Composable fun OperationTiles(open: (String) -> Unit) {
-    val tiles = listOf(
-        "Anlagen" to androidx.compose.material.icons.Icons.Outlined.PrecisionManufacturing,
-        "Arbeitsprotokoll" to androidx.compose.material.icons.Icons.Outlined.Assignment,
-        "Zähler" to androidx.compose.material.icons.Icons.Outlined.Speed,
-        "Rundgang" to androidx.compose.material.icons.Icons.Outlined.Checklist,
-        "Kalender" to androidx.compose.material.icons.Icons.Outlined.CalendarMonth,
-        "Anleitungen" to androidx.compose.material.icons.Icons.Outlined.MenuBook,
-        "Bestellungen" to androidx.compose.material.icons.Icons.Outlined.ShoppingCart,
-        "Textvorlagen" to androidx.compose.material.icons.Icons.Outlined.ContentCopy,
-        "Adressbuch" to androidx.compose.material.icons.Icons.Outlined.Contacts)
-    tiles.chunked(2).forEach { row -> Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-        row.forEach { (name, icon) -> Card(onClick = { open(name) }, modifier = Modifier.weight(1f).padding(bottom = 12.dp).heightIn(min = 115.dp)) {
-            Column(Modifier.fillMaxWidth().padding(18.dp), horizontalAlignment = androidx.compose.ui.Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                Icon(icon, null, tint = Mint, modifier = Modifier.size(32.dp)); Text(name, style = MaterialTheme.typography.titleMedium)
-                if (name == "Arbeitsprotokoll" || name == "Textvorlagen") Text(if (name == "Arbeitsprotokoll") "Störungen & Arbeiten" else "Texte wiederverwenden", style = MaterialTheme.typography.bodySmall, color = Muted)
-            }
-        } }
-    } }
-}
 @Composable fun PasswordChangeDialog(busy: Boolean, close: () -> Unit, save: (CharArray, CharArray) -> Unit) {
     var old by remember { mutableStateOf("") }; var next by remember { mutableStateOf("") }; var repeat by remember { mutableStateOf("") }
     Form("App-Passwort ändern", !busy && old.isNotEmpty() && next.length >= 10 && next == repeat && old != next, close, { save(old.toCharArray(), next.toCharArray()) }) {

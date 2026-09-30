@@ -179,7 +179,32 @@ class NavigationTest {
             org.junit.Assert.assertEquals(1, scenarioModel.data!!.contacts.single().entryIds.size)
             ui.onNodeWithText("Prüfanlage geändert", substring = false).performScrollTo().performClick()
             ui.onNodeWithText("Service Testperson", substring = false).assertExists()
-            ui.onNodeWithText("Service Testperson", substring = false).performScrollTo().performClick()
+            // A cross-link returns to its actual origin instead of the generic asset list.
+            ui.onNodeWithContentDescription("Zurück").performClick()
+            ui.onNodeWithText("Zugeordnete Störungen / Arbeiten").assertExists()
+            ui.onNodeWithText("Prüfstörung · Offen").performScrollTo().performClick()
+            ui.onNodeWithText("Beobachtung, Maßnahmen, nächste Schritte").performTextReplacement("Geprüfter Rücksprung mit Formular")
+            ui.onNodeWithText("Passende Anleitungen · 0 zugeordnet ▾").performScrollTo().performClick()
+            ui.onNodeWithContentDescription("Passende Anleitungen: Pumpenprüfung").performScrollTo().performClick().assertIsOn()
+            ui.onNodeWithText("Anleitung: Pumpenprüfung").performScrollTo().performClick()
+            ui.waitUntil(15000) { !scenarioModel.busy && ui.onAllNodesWithText("Anleitungseinstellungen").fetchSemanticsNodes().isNotEmpty() }
+            org.junit.Assert.assertEquals("Geprüfter Rücksprung mit Formular", scenarioModel.data!!.entries.single().note)
+            // Cross-link history must survive the app's automatic lock as encrypted draft state.
+            scenario.moveToState(androidx.lifecycle.Lifecycle.State.CREATED)
+            scenario.recreate(); scenario.moveToState(androidx.lifecycle.Lifecycle.State.RESUMED)
+            ui.onNodeWithText("Passwort", substring = false).performTextInput("NeuesPasswort2026")
+            ui.onNodeWithText("Entsperren", substring = false).performClick()
+            ui.waitUntil(60000) { ui.onAllNodesWithText("Anleitungseinstellungen").fetchSemanticsNodes().isNotEmpty() }
+            ui.onNodeWithContentDescription("Zurück").performClick()
+            ui.onNodeWithText("Geprüfter Rücksprung mit Formular").assertExists()
+            ui.onNodeWithText("Folgetermin anlegen (morgen 08:00, danach bearbeiten)").performScrollTo().performClick()
+            ui.waitUntil(15000) { ui.onAllNodesWithText("Datum und Uhrzeit (TT.MM.JJJJ HH:MM)").fetchSemanticsNodes().isNotEmpty() }
+            ui.onNodeWithText("Grund / Arbeit *").assertExists()
+            ui.onNodeWithText("Speichern").performClick()
+            ui.waitUntil(15000) { !scenarioModel.busy && scenarioModel.data!!.work.appointments.size == 1 }
+            ui.onNodeWithContentDescription("Zurück").performClick()
+            ui.onNodeWithText("Geprüfter Rücksprung mit Formular").assertExists()
+            ui.onNodeWithText("Abbrechen").performClick()
             ui.onNodeWithText("Zugeordnete Störungen / Arbeiten").assertExists()
             ui.onRoot().captureToImage().asAndroidBitmap().let { bitmap ->
                 File(requireNotNull(InstrumentationRegistry.getArguments().getString("additionalTestOutputDir")), "kontakte.png").outputStream().use { bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it) }

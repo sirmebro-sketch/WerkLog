@@ -28,7 +28,6 @@ import kotlinx.coroutines.delay
     var qr by rememberSaveable { mutableStateOf(false) }
     var deleteAsset by rememberSaveable { mutableStateOf(false) }
     var deletion by rememberSaveable { mutableStateOf<Pair<String, String>?>(null) }
-    TextButton(onClick = back) { Text("‹ Alle Anlagen") }
     Text(asset.name, fontSize = 28.sp, fontWeight = FontWeight.Bold)
     Text("${asset.trade} · ${asset.location.ifBlank { "Standort offen" }}", color = Mint)
     Text(asset.tag, color = Muted)

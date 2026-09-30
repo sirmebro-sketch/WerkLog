@@ -337,14 +337,30 @@ private fun java.io.InputStream.readBytesLimited(): ByteArray {
     var mail by rememberSaveable { mutableStateOf<Pair<String, String>?>(null) }
     var linkedRecord by rememberSaveable { mutableStateOf<String?>(null) }
     var nextGuideStep by remember { mutableStateOf<(() -> Unit)?>(null) }
-    BackHandler(enabled = page == 4 && tool != null) { tool = null }
-    BackHandler(enabled = page == 1 && selectedAssetId != null && dialog == null) { selectedAssetId = null }
+    val scroll = rememberScrollState()
+    var history by rememberSaveable { mutableStateOf<List<WorkspaceRoute>>(emptyList()) }
+    var restoreScroll by remember { mutableStateOf<Int?>(null) }
+    fun route() = WorkspaceRoute(page, tool, selectedAssetId, linkedRecord,
+        if (dialog == "entry") editEntry?.id ?: model.data?.entries?.lastOrNull()?.id else null, scroll.value)
+    fun showRoute(next: WorkspaceRoute) {
+        page = next.page; tool = next.tool; selectedAssetId = next.assetId; linkedRecord = next.recordId
+        editEntry = next.entryId?.let { id -> model.data?.entries?.find { it.id == id } }
+        dialog = if (editEntry != null) "entry" else null
+        restoreScroll = next.scrollY
+    }
+    fun mainPage(next: Int) { history = emptyList(); showRoute(WorkspaceRoute(next)) }
+    fun navigateBack() {
+        if (history.isNotEmpty()) { val next = history.last(); history = history.dropLast(1); showRoute(next) }
+        else showRoute(route().parent())
+    }
+    fun pushRoute(next: WorkspaceRoute, origin: WorkspaceRoute = route()) {
+        history = (history + origin).takeLast(50); showRoute(next)
+    }
     LaunchedEffect(requestedAsset) { requestedAsset?.let { selectedAssetId = it; page = 1; tool = null; assetOpened() } }
     val titles = listOf("Heute", "Anlagen", "Arbeitsprotokoll", "Rundgang", "Betrieb", "Einstellung")
     val context = androidx.compose.ui.platform.LocalContext.current
     val tourPrefs = context.getSharedPreferences("onboarding", 0)
     var tour by rememberSaveable { mutableIntStateOf(if (tourPrefs.getBoolean("done-v1", false)) -1 else 0) }
-    BackHandler(enabled = page != 0 && dialog == null && selectedAssetId == null && tool == null) { page = if (page in 1..3) 4 else 0 }
     val activity = context as MainActivity
     var biometricPromptRunning by rememberSaveable { mutableStateOf(false) }
     val tourVisible = tour >= 0 && !model.offerBiometric && !biometricPromptRunning && model.error == null
@@ -356,23 +372,28 @@ private fun java.io.InputStream.readBytesLimited(): ByteArray {
     fun finishTour() { tour = -1; page = 0; tourPrefs.edit().putBoolean("done-v1", true).apply() }
     LaunchedEffect(tour, tourVisible) { if (tourVisible) { page = tourSteps[tour].first; tool = null; selectedAssetId = null } }
     BackHandler(enabled = tourVisible) { finishTour() }
+    BackHandler(enabled = !tourVisible && dialog == null && page != 0 && !model.busy) { navigateBack() }
+    BackHandler(enabled = model.busy && !tourVisible) { }
     CompositionLocalProvider(LocalSaving provides model.busy, LocalRecordLink provides { kind, id ->
-        dialog = null
         when (kind) {
-            "Anlagen" -> { selectedAssetId = id; page = 1; tool = null }
             "Neue Bestellung" -> {
+                val origin = route()
                 val order = PartsOrder(title = "Materialbedarf · ${assetName(d, id)}", assetId = id)
                 model.update(d.copy(work = d.work.copy(orders = d.work.orders + order))) {
-                    linkedRecord = order.id; tool = "Bestellungen"; page = 4
+                    pushRoute(WorkspaceRoute(4, "Bestellungen", recordId = order.id), origin)
                 }
             }
             "Vorgang" -> { editEntry = d.entries.find { it.id == id }; dialog = "entry" }
-            else -> { linkedRecord = id; tool = kind; page = 4 }
+            "Anlagen" -> pushRoute(WorkspaceRoute(1, assetId = id))
+            else -> pushRoute(WorkspaceRoute(4, kind, recordId = id))
         }
     }) {
     Scaffold(containerColor = WerkColors.background, topBar = {
         Column {
             Row(Modifier.fillMaxWidth().statusBarsPadding().padding(horizontal = 20.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+                if (page != 0 && !tourVisible) IconButton(onClick = { navigateBack() }, enabled = !model.busy) {
+                    Icon(Icons.Outlined.ArrowBack, "Zurück", tint = Mint)
+                }
                 Column(Modifier.weight(1f)) { Text("WERKLOG  /  LOKAL", color = Mint, fontSize = 11.sp, fontWeight = FontWeight.Bold); Text(if (page == 4 && tool != null) tool!! else titles[page], fontSize = 30.sp, fontWeight = FontWeight.Bold) }
                 IconButton(onClick = { model.lock() }) { Icon(Icons.Outlined.Lock, "App sperren", tint = Mint) }
             }
@@ -386,21 +407,23 @@ private fun java.io.InputStream.readBytesLimited(): ByteArray {
             back = { if (tour > 0) tour-- }, skip = { finishTour() },
             next = { if (tour == tourSteps.lastIndex) finishTour() else tour++ })
         NavigationBar(containerColor = WerkColors.surface) {
-            NavigationBarItem(selected = page == 0, enabled = !model.busy, onClick = { page = 0; tool = null }, icon = { Icon(Icons.Outlined.Today, "Heute") }, label = { Text("Heute") })
-            NavigationBarItem(selected = page in 1..4, enabled = !model.busy, onClick = { page = 4; tool = null; selectedAssetId = null }, icon = {
+            NavigationBarItem(selected = page == 0, enabled = !model.busy, onClick = { mainPage(0) }, icon = { Icon(Icons.Outlined.Today, "Heute") }, label = { Text("Heute") })
+            NavigationBarItem(selected = page in 1..4, enabled = !model.busy, onClick = { mainPage(4) }, icon = {
                 Surface(shape = androidx.compose.foundation.shape.CircleShape, color = Mint, modifier = Modifier.size(58.dp)) {
                     Box(contentAlignment = Alignment.Center) { Icon(PowerPlantIcon, "Betrieb", tint = WerkColors.background, modifier = Modifier.size(32.dp)) }
                 }
             }, label = { Text("Betrieb", fontWeight = FontWeight.Bold) })
-            NavigationBarItem(selected = page == 5, enabled = !model.busy, onClick = { page = 5; tool = null }, icon = { Icon(Icons.Outlined.Settings, "Einstellung") }, label = { Text("Einstellung") })
+            NavigationBarItem(selected = page == 5, enabled = !model.busy, onClick = { mainPage(5) }, icon = { Icon(Icons.Outlined.Settings, "Einstellung") }, label = { Text("Einstellung") })
         }
         }
     }) { padding ->
-        val scroll = rememberScrollState()
-        var lastScrollPage by rememberSaveable { mutableStateOf("$page:$tool:$selectedAssetId") }
-        LaunchedEffect(page, tool, selectedAssetId) {
-            val current = "$page:$tool:$selectedAssetId"
-            if (current != lastScrollPage) { scroll.scrollTo(0); lastScrollPage = current }
+        var lastScrollPage by rememberSaveable { mutableStateOf("$page:$tool:$selectedAssetId:$linkedRecord") }
+        LaunchedEffect(page, tool, selectedAssetId, linkedRecord) {
+            val current = "$page:$tool:$selectedAssetId:$linkedRecord"
+            if (current != lastScrollPage) {
+                withFrameNanos { }
+                scroll.scrollTo(restoreScroll ?: 0); restoreScroll = null; lastScrollPage = current
+            }
         }
         Column(Modifier.fillMaxSize().padding(padding).consumeWindowInsets(padding).verticalScroll(scroll).padding(horizontal = 20.dp)) {
             if (model.busy) LinearProgressIndicator(Modifier.fillMaxWidth())
@@ -458,7 +481,7 @@ private fun java.io.InputStream.readBytesLimited(): ByteArray {
                 1 -> {
                     val selected = d.assets.find { it.id == selectedAssetId }
                     if (selected != null) {
-                        AssetDetails(selected, d, model.busy, { selectedAssetId = null }, { editAsset = selected; dialog = "asset" },
+                        AssetDetails(selected, d, model.busy, { navigateBack() }, { editAsset = selected; dialog = "asset" },
                             saveData,
                             { editEntry = null; preselectedAssetId = selected.id; dialog = "entry" },
                             { editReading = null; preselectedAssetId = selected.id; dialog = "reading" },
@@ -529,13 +552,16 @@ private fun java.io.InputStream.readBytesLimited(): ByteArray {
                     } }
                 }
                 4 -> {
-                    if (tool != null) CompositionLocalProvider(LocalGuideStepAction provides { nextGuideStep = it }) { WorkTools(tool!!, d, model.busy, { tool = null }, saveData, onPhoto, onOrder, linkedRecord) { linkedRecord = null } }
-                    else OperationTiles { label -> when (label) {
-                        "Anlagen" -> { page = 1; selectedAssetId = null }
-                        "Arbeitsprotokoll" -> page = 2
-                        "Rundgang" -> page = 3
-                        else -> { linkedRecord = null; tool = label }
-                    } }
+                    if (tool != null) CompositionLocalProvider(LocalGuideStepAction provides { nextGuideStep = it }) { WorkTools(tool!!, d, model.busy, saveData, onPhoto, onOrder, linkedRecord) { linkedRecord = it } }
+                    else OperationTiles { label ->
+                        history = emptyList()
+                        showRoute(when (label) {
+                            "Anlagen" -> WorkspaceRoute(1)
+                            "Arbeitsprotokoll" -> WorkspaceRoute(2)
+                            "Rundgang" -> WorkspaceRoute(3)
+                            else -> WorkspaceRoute(4, label)
+                        })
+                    }
                 }
                 5 -> {
                     val lastBackup = context.getSharedPreferences("backup", 0).getLong("lastBackup", 0)
@@ -558,7 +584,7 @@ private fun java.io.InputStream.readBytesLimited(): ByteArray {
                     Hint("WerkLog dokumentiert Beobachtungen und Tätigkeiten. Freigaben, Betriebsanweisungen und eure offiziellen Meldewege bleiben maßgeblich. Keine Anlagensteuerung oder Verbindung zur GLT.")
                     OutlinedButton(onClick = { dialog = "password" }, enabled = !model.busy, modifier = Modifier.fillMaxWidth()) { Text("App-Passwort ändern") }
                     OutlinedButton(onClick = { tour = 0; page = 0 }, modifier = Modifier.fillMaxWidth()) { Text("Kurze App-Führung starten") }
-                    Text("WERKLOG 0.6.0 · KOTLIN / ANDROID", color = Muted, fontSize = 11.sp)
+                    Text("WERKLOG 0.6.1 · KOTLIN / ANDROID", color = Muted, fontSize = 11.sp)
                 }
             }
             Spacer(Modifier.height(24.dp))
@@ -576,9 +602,12 @@ private fun java.io.InputStream.readBytesLimited(): ByteArray {
     if (dialog == "asset") AssetEditor(editAsset, d.assets, availableTrades(d), { dialog = null }) { a -> model.update(d.copy(assets = d.assets.filterNot { it.id == a.id } + a)) { dialog = null } }
     if (dialog == "entry") EntryEditor(editEntry, d, model.busy, saveData, d.assets, d.work.templates, preselectedAssetId, { dialog = null }, { editEntry?.let { removal = "entry" to it.id }; dialog = null }, { e ->
         val order = orderFromEntry(e)
-        model.update(d.copy(entries = d.entries.filterNot { it.id == e.id } + e, work = d.work.copy(orders = d.work.orders + order))) { linkedRecord = order.id; dialog = null; page = 4; tool = "Bestellungen" }
+        model.update(d.copy(entries = d.entries.filterNot { it.id == e.id } + e, work = d.work.copy(orders = d.work.orders + order))) { pushRoute(WorkspaceRoute(4, "Bestellungen", recordId = order.id)) }
     }, { e ->
-        model.update(d.copy(entries = d.entries.filterNot { it.id == e.id } + e, work = d.work.copy(appointments = d.work.appointments + Appointment(title = e.title, start = formatAppointment(java.time.LocalDate.now().plusDays(1).atTime(8, 0)), assetId = e.assetId, note = e.note)))) { dialog = null; page = 4; tool = "Kalender" }
+        val event = Appointment(title = e.title, start = formatAppointment(java.time.LocalDate.now().plusDays(1).atTime(8, 0)), assetId = e.assetId, note = e.note)
+        model.update(d.copy(entries = d.entries.filterNot { it.id == e.id } + e, work = d.work.copy(appointments = d.work.appointments + event))) {
+            pushRoute(WorkspaceRoute(4, "Kalender", recordId = event.id))
+        }
     }) { e -> model.update(d.copy(entries = d.entries.filterNot { it.id == e.id } + e)) { dialog = null } }
     if (dialog == "reading") ReadingEditor(editReading, d.assets, preselectedAssetId, { dialog = null }) { r -> model.update(d.copy(readings = d.readings.filterNot { it.id == r.id } + r)) { dialog = null } }
     if (dialog == "round") RoundEditor(editRound, { dialog = null }) { r -> model.update(d.copy(rounds = d.rounds.filterNot { it.id == r.id } + r)) { dialog = null } }
@@ -647,7 +676,7 @@ private fun java.io.InputStream.readBytesLimited(): ByteArray {
     CompositionLocalProvider(LocalSaving provides busy, LocalRecordLink provides { kind, id ->
         if (!busy && validEntry) {
             val e = current()
-            saveData(data.copy(entries = data.entries.filterNot { it.id == e.id } + e)) { close(); navigate(kind, id) }
+            saveData(data.copy(entries = data.entries.filterNot { it.id == e.id } + e)) { navigate(kind, id) }
         }
     }) {
     Form("Störung / Tätigkeit", !busy && validEntry, close, {
@@ -662,16 +691,16 @@ private fun java.io.InputStream.readBytesLimited(): ByteArray {
         LinkChoices("Passende Anleitungen", data.work.guides.map { it.id to it.title }, guideIds) { guideIds = it }
         data.work.guides.filter { it.id in guideIds || (it.assetId == asset && asset.isNotBlank()) }.forEach { g ->
             val open = LocalRecordLink.current
-            TextButton(onClick = { open("Anleitungen", g.id) }) { Text("Anleitung: ${g.title}") }
+            TextButton(onClick = { open("Anleitungen", g.id) }, enabled = !busy && validEntry) { Text("Anleitung: ${g.title}") }
         }
         if (existing != null) {
             ContactLinks(data, "Vorgang", existing.id, busy, saveData)
             data.work.orders.filter { it.entryId == existing.id }.forEach { o -> RecordLink("Bestellungen", o.id, "Bestellung: ${o.title}") }
             TextButton(onClick = { order(current()) }, enabled = !busy && validEntry) { Text("Teileanforderung aus diesem Vorgang") }
             TextButton(onClick = { appointment(current()) }, enabled = !busy && validEntry) { Text("Folgetermin anlegen (morgen 08:00, danach bearbeiten)") }
-            TextButton(onClick = delete) { Text("Vorgang löschen", color = MaterialTheme.colorScheme.error) }
+            TextButton(onClick = delete, enabled = !busy) { Text("Vorgang löschen", color = MaterialTheme.colorScheme.error) }
         }
-        if (existing != null) TextButton(onClick = { save(current().copy(id = newId(), title = "$title (Kopie)", status = "Offen", created = System.currentTimeMillis(), updated = System.currentTimeMillis(), minutes = 0)) }) { Text("Als neue Tätigkeit duplizieren") }
+        if (existing != null) TextButton(enabled = !busy && validEntry, onClick = { save(current().copy(id = newId(), title = "$title (Kopie)", status = "Offen", created = System.currentTimeMillis(), updated = System.currentTimeMillis(), minutes = 0)) }) { Text("Als neue Tätigkeit duplizieren") }
     }
     }
 }
