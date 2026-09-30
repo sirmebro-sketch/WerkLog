@@ -3,6 +3,7 @@ package de.werklog.app
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -135,12 +136,19 @@ import java.util.Locale
     }
 }
 
+val LocalGuideStepAction = staticCompositionLocalOf<((() -> Unit)?) -> Unit> { {} }
+
 @Composable private fun GuideScreen(d: Data, busy: Boolean, save: (Data) -> Unit, photo: (PhotoTarget) -> Unit) {
-    var selected by remember { mutableStateOf<String?>(null) }; var editor by remember { mutableStateOf(false) }
+    var selected by rememberSaveable { mutableStateOf<String?>(null) }; var editor by remember { mutableStateOf(false) }
     var stepEditor by remember { mutableStateOf(false) }; var selectedStep by remember { mutableStateOf<GuideStep?>(null) }
     var deletion by remember { mutableStateOf<GuideStep?>(null) }
     var deleteGuide by remember { mutableStateOf(false) }
     val guide = d.work.guides.find { it.id == selected }
+    val setNextAction = LocalGuideStepAction.current
+    DisposableEffect(guide?.id, guide?.steps?.size) {
+        setNextAction(if (guide != null && guide.steps.size < 100) ({ selectedStep = null; stepEditor = true }) else null)
+        onDispose { setNextAction(null) }
+    }
     fun update(next: Guide) {
         val previous = d.work.guides.find { it.id == next.id }
         val contentChanged = previous != null && (previous.title != next.title || previous.steps != next.steps || previous.assetId != next.assetId)
@@ -158,8 +166,6 @@ import java.util.Locale
         TextButton(onClick = { selected = null }) { Text("‹ Alle Anleitungen") }
         Text(guide.title, fontSize = 24.sp, fontWeight = FontWeight.Bold)
         Text("Version ${guide.revision} · Geprüft: ${guide.checked.ifBlank { "Noch nicht" }}", color = Muted)
-        TextButton(onClick = { update(guide.copy(checked = LocalDate.now().format(DateTimeFormatter.ofPattern("dd.MM.uuuu")))) }, enabled = !busy) { Text("Heute inhaltlich geprüft") }
-        TextButton(onClick = { editor = true }, enabled = !busy) { Text("Titel / Anlage bearbeiten") }; TextButton(onClick = { deleteGuide = true }, enabled = !busy) { Text("Anleitung löschen") }
         guide.steps.forEachIndexed { index, step -> Panel {
             Text("${index + 1}. ${step.title}", fontSize = 20.sp, fontWeight = FontWeight.Bold); Text(step.body); StoredPhoto(step.image)
             Row { TextButton(onClick = { selectedStep = step; stepEditor = true }, enabled = !busy) { Text("Bearbeiten") }
@@ -168,7 +174,10 @@ import java.util.Locale
                 if (step.image.isNotEmpty()) TextButton(onClick = { update(guide.copy(steps = guide.steps.map { if (it.id == step.id) it.copy(image = "") else it })) }, enabled = !busy) { Text("Bild entfernen") }
                 TextButton(onClick = { deletion = step }, enabled = !busy) { Text("Löschen") } }
         } }
-        Button(onClick = { selectedStep = null; stepEditor = true }, enabled = !busy && guide.steps.size < 100) { Text("+ Nächster Schritt") }
+        Section("Anleitungseinstellungen")
+        TextButton(onClick = { update(guide.copy(checked = LocalDate.now().format(DateTimeFormatter.ofPattern("dd.MM.uuuu")))) }, enabled = !busy) { Text("Heute inhaltlich geprüft") }
+        TextButton(onClick = { editor = true }, enabled = !busy) { Text("Titel / Anlage bearbeiten") }; TextButton(onClick = { deleteGuide = true }, enabled = !busy) { Text("Anleitung löschen") }
+        if (guide.steps.isEmpty()) Hint("Füge oben den ersten Arbeitsschritt hinzu.")
         Hint("Bilder: max. 512 KiB pro Bild, insgesamt höchstens 500 Bilder für Anleitungen und Bestelllisten. Fotos erst nach dem Speichern des Schritts hinzufügen.")
     }
     if (deleteGuide && guide != null) ConfirmRemoval("Anleitung löschen?", "Alle Schritte und Bilder dieser Anleitung werden entfernt.", busy, { deleteGuide = false }) { save(d.copy(work = d.work.copy(guides = d.work.guides.filterNot { it.id == guide.id }))); selected = null }

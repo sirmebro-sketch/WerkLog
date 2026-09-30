@@ -88,8 +88,9 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
     private var photoFile: File? = null
     private var photoTarget: PhotoTarget? = null
     private var readyPhoto by mutableStateOf<Pair<File, PhotoTarget>?>(null)
-    private val camera = registerForActivityResult(ActivityResultContracts.TakePicture()) { success ->
-        val file = photoFile; val target = photoTarget; photoFile = null; photoTarget = null
+    private val camera = registerForActivityResult(ActivityResultContracts.TakePicture()) { success -> completeCameraCapture(success) }
+    internal fun completeCameraCapture(success: Boolean) {
+        val file = photoFile; val target = photoTarget; photoFile = null; photoTarget = null; handoffUntil = 0
         if (success && file != null && target != null) readyPhoto = file to target else file?.delete()
     }
     private var pendingBackup: File? = null
@@ -113,12 +114,26 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
     }
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        handoffUntil = savedInstanceState?.getLong("handoffUntil") ?: 0L
+        backgroundDeadline = savedInstanceState?.getLong("backgroundDeadline") ?: 0L
+        fun restoredFile(key: String): File? = savedInstanceState?.getString(key)?.let { name ->
+            File(File(cacheDir, "camera"), File(name).name).takeIf { it.isFile && System.currentTimeMillis() - it.lastModified() < 15 * 60_000L }
+        }
+        val kind = savedInstanceState?.getString("photoKind")
+        val targetId = savedInstanceState?.getString("photoId")
+        if (kind != null && targetId != null) {
+            val target = PhotoTarget(kind, targetId)
+            val ready = restoredFile("readyPhoto")
+            if (ready != null) readyPhoto = ready to target else {
+                photoTarget = target; photoFile = restoredFile("photoFile")
+            }
+        }
         window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
         androidx.core.content.ContextCompat.registerReceiver(this, screenOff, android.content.IntentFilter(Intent.ACTION_SCREEN_OFF), androidx.core.content.ContextCompat.RECEIVER_NOT_EXPORTED)
         enableEdgeToEdge()
         receiveShare(intent)
         OrderAttachmentProvider.cleanup(this)
-        File(cacheDir, "camera").listFiles()?.forEach { it.delete() }
+        File(cacheDir, "camera").listFiles()?.filter { it != photoFile && it != readyPhoto?.first }?.forEach { it.delete() }
         File(cacheDir, "shares").listFiles()?.filter { System.currentTimeMillis() - it.lastModified() > 86_400_000 }?.forEach { it.delete() }
         setContent { CompositionLocalProvider(LocalImageLoader provides { value -> model.image(value) }, LocalTransferScope provides { active -> transferScopes = (transferScopes + if (active) 1 else -1).coerceAtLeast(0) }) { MaterialTheme(colorScheme = WerkColors) {
             Surface(Modifier.fillMaxSize(), color = WerkColors.background) {
@@ -150,6 +165,7 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
     }
     override fun onStop() {
         super.onStop(); sourceTarget = null
+        if (isChangingConfigurations) return
         val now = android.os.SystemClock.elapsedRealtime()
         val deviceLocked = getSystemService(android.app.KeyguardManager::class.java).isDeviceLocked
         if (model.data != null && !deviceLocked && (transferScopes > 0 || handoffUntil > now)) {
@@ -163,9 +179,19 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
         if (backgroundDeadline > 0 && android.os.SystemClock.elapsedRealtime() >= backgroundDeadline) model.lock()
         backgroundLock?.cancel(); backgroundDeadline = 0
     }
+    override fun onSaveInstanceState(outState: Bundle) {
+        outState.putLong("handoffUntil", handoffUntil)
+        outState.putLong("backgroundDeadline", backgroundDeadline)
+        val target = readyPhoto?.second ?: photoTarget
+        target?.let { outState.putString("photoKind", it.kind); outState.putString("photoId", it.id) }
+        photoFile?.let { outState.putString("photoFile", it.name) }
+        readyPhoto?.first?.let { outState.putString("readyPhoto", it.name) }
+        super.onSaveInstanceState(outState)
+    }
     override fun onDestroy() {
         unregisterReceiver(screenOff)
-        model.lock()
+        if (isFinishing) { photoFile?.delete(); readyPhoto?.first?.delete() }
+        if (!isChangingConfigurations) model.lock()
         super.onDestroy()
     }
     override fun onNewIntent(intent: Intent) {
@@ -267,8 +293,8 @@ private fun java.io.InputStream.readBytesLimited(): ByteArray {
 
 @Composable private fun Workspace(model: WorkModel, onExport: () -> Unit, onShare: (String, String) -> Unit, onShareFile: (File) -> Unit, onImport: () -> Unit, onPhoto: (PhotoTarget) -> Unit, onOrder: (PartsOrder) -> Unit, requestedAsset: String?, assetOpened: () -> Unit) {
     val d = model.data ?: return
-    var tool by remember { mutableStateOf<String?>(null) }
-    var page by remember { mutableIntStateOf(0) }
+    var tool by rememberSaveable { mutableStateOf<String?>(null) }
+    var page by rememberSaveable { mutableIntStateOf(0) }
     var dialog by remember { mutableStateOf<String?>(null) }
     var selectedAssetId by remember { mutableStateOf<String?>(null) }
     var preselectedAssetId by remember { mutableStateOf<String?>(null) }
@@ -279,6 +305,7 @@ private fun java.io.InputStream.readBytesLimited(): ByteArray {
     var removal by remember { mutableStateOf<Pair<String, String>?>(null) }
     var run by remember { mutableStateOf<Round?>(null) }
     var mail by remember { mutableStateOf<Pair<String, String>?>(null) }
+    var nextGuideStep by remember { mutableStateOf<(() -> Unit)?>(null) }
     BackHandler(enabled = page == 4 && tool != null) { tool = null }
     BackHandler(enabled = page == 1 && selectedAssetId != null && dialog == null) { selectedAssetId = null }
     LaunchedEffect(requestedAsset) { requestedAsset?.let { selectedAssetId = it; page = 1; tool = null; assetOpened() } }
@@ -299,10 +326,15 @@ private fun java.io.InputStream.readBytesLimited(): ByteArray {
     LaunchedEffect(tour, tourVisible) { if (tourVisible) { page = tourSteps[tour].first; tool = null; selectedAssetId = null } }
     BackHandler(enabled = tourVisible) { finishTour() }
     Scaffold(containerColor = WerkColors.background, topBar = {
+        Column {
             Row(Modifier.fillMaxWidth().statusBarsPadding().padding(horizontal = 20.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) { Text("WERKLOG  /  LOKAL", color = Mint, fontSize = 11.sp, fontWeight = FontWeight.Bold); Text(if (page == 4 && tool != null) tool!! else titles[page], fontSize = 30.sp, fontWeight = FontWeight.Bold) }
                 IconButton(onClick = { model.lock() }) { Icon(Icons.Outlined.Lock, "App sperren", tint = Mint) }
             }
+            if (page == 4 && tool == "Anleitungen" && nextGuideStep != null) Button(
+                onClick = { nextGuideStep?.invoke() }, enabled = !model.busy,
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp).padding(bottom = 8.dp)) { Text("+ Nächster Schritt") }
+        }
     }, bottomBar = {
         Column {
         if (tourVisible) TourStrip(tour, tourSteps[tour].second, tourSteps[tour].third,
@@ -428,7 +460,7 @@ private fun java.io.InputStream.readBytesLimited(): ByteArray {
                     } }
                 }
                 4 -> {
-                    if (tool != null) WorkTools(tool!!, d, model.busy, { tool = null }, { model.update(it) }, onPhoto, onOrder)
+                    if (tool != null) CompositionLocalProvider(LocalGuideStepAction provides { nextGuideStep = it }) { WorkTools(tool!!, d, model.busy, { tool = null }, { model.update(it) }, onPhoto, onOrder) }
                     else OperationTiles { label -> when (label) {
                         "Anlagen" -> { page = 1; selectedAssetId = null }
                         "Journal" -> page = 2
@@ -454,7 +486,7 @@ private fun java.io.InputStream.readBytesLimited(): ByteArray {
                     Hint("WerkLog dokumentiert Beobachtungen und Tätigkeiten. Freigaben, Betriebsanweisungen und eure offiziellen Meldewege bleiben maßgeblich. Keine Anlagensteuerung oder Verbindung zur GLT.")
                     OutlinedButton(onClick = { dialog = "password" }, enabled = !model.busy, modifier = Modifier.fillMaxWidth()) { Text("App-Passwort ändern") }
                     OutlinedButton(onClick = { tour = 0; page = 0 }, modifier = Modifier.fillMaxWidth()) { Text("Kurze App-Führung starten") }
-                    Text("WERKLOG 0.4.1 · KOTLIN / ANDROID", color = Muted, fontSize = 11.sp)
+                    Text("WERKLOG 0.4.2 · KOTLIN / ANDROID", color = Muted, fontSize = 11.sp)
                 }
             }
             Spacer(Modifier.height(24.dp))

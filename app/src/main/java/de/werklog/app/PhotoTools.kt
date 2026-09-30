@@ -5,6 +5,16 @@ import android.graphics.BitmapFactory
 import android.graphics.Matrix
 import androidx.exifinterface.media.ExifInterface
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectTransformGestures
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
+import androidx.compose.ui.window.SecureFlagPolicy
+import androidx.compose.ui.Alignment
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -53,10 +63,10 @@ suspend fun compactPhoto(file: File, maximum: Int = 1920, maxBytes: Int = MAX_IM
             }
         }
         Base64.getEncoder().encodeToString(result)
-    } finally { bitmap?.recycle(); file.delete() }
+    } finally { bitmap?.recycle() }
 }
 suspend fun recognizeMeter(file: File): String {
-    val bitmap = try { withContext(Dispatchers.IO) { decodeCamera(file, 2048) } } finally { file.delete() }
+    val bitmap = withContext(Dispatchers.IO) { decodeCamera(file, 2048) }
     return suspendCancellableCoroutine { continuation ->
         val recognizer = TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS)
         try {
@@ -74,6 +84,7 @@ suspend fun recognizeMeter(file: File): String {
 val LocalImageLoader = staticCompositionLocalOf<suspend (String) -> ByteArray> { { java.util.Base64.getDecoder().decode(it) } }
 @Composable internal fun StoredPhoto(encoded: String, initiallyOpen: Boolean = false) {
     if (encoded.isEmpty()) return
+    var fullScreen by remember(encoded) { mutableStateOf(false) }
     var expanded by remember(encoded) { mutableStateOf(initiallyOpen) }
     TextButton(onClick = { expanded = !expanded }) { Text(if (expanded) "Bild verbergen" else "Bild anzeigen") }
     if (!expanded) return
@@ -86,11 +97,40 @@ val LocalImageLoader = staticCompositionLocalOf<suspend (String) -> ByteArray> {
                 require(bytes.size <= MAX_IMAGE_BYTES)
                 val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }; BitmapFactory.decodeByteArray(bytes, 0, bytes.size, bounds)
                 require(bounds.outWidth in 1..4096 && bounds.outHeight in 1..4096)
-                BitmapFactory.decodeByteArray(bytes, 0, bytes.size, BitmapFactory.Options().apply { inSampleSize = 2 })
+                BitmapFactory.decodeByteArray(bytes, 0, bytes.size, BitmapFactory.Options())
             } } finally { bytes.fill(0) }
         }.getOrNull()
     }
-    bitmap?.let { Image(it.asImageBitmap(), "Hinterlegtes Bild", modifier = Modifier.fillMaxWidth().heightIn(max = 240.dp)) }
+    bitmap?.let { loaded ->
+        Image(loaded.asImageBitmap(), "Bild in Vollbild öffnen", contentScale = ContentScale.Fit,
+            modifier = Modifier.fillMaxWidth().heightIn(min = 180.dp, max = 360.dp).clickable { fullScreen = true })
+        TextButton(onClick = { fullScreen = true }) { Text("Groß öffnen / vergrößern") }
+        if (fullScreen) Dialog(onDismissRequest = { fullScreen = false }, properties = DialogProperties(
+            usePlatformDefaultWidth = false, decorFitsSystemWindows = false, securePolicy = SecureFlagPolicy.SecureOn)) {
+            var zoom by remember { mutableFloatStateOf(1f) }
+            var offset by remember { mutableStateOf(Offset.Zero) }
+            Surface(Modifier.fillMaxSize(), color = androidx.compose.ui.graphics.Color.Black) {
+                Column(Modifier.fillMaxSize().systemBarsPadding()) {
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                        TextButton(onClick = { zoom = 1f; offset = Offset.Zero }) { Text("Zurücksetzen") }
+                        TextButton(onClick = { fullScreen = false }) { Text("Schließen") }
+                    }
+                    Box(Modifier.weight(1f).fillMaxWidth().pointerInput(Unit) {
+                        detectTransformGestures { _, pan, change, _ ->
+                            zoom = (zoom * change).coerceIn(1f, 6f)
+                            val limitX = size.width * (zoom - 1) / 2f
+                            val limitY = size.height * (zoom - 1) / 2f
+                            offset = Offset((offset.x + pan.x).coerceIn(-limitX, limitX), (offset.y + pan.y).coerceIn(-limitY, limitY))
+                        }
+                    }, contentAlignment = Alignment.Center) {
+                        Image(loaded.asImageBitmap(), "Vergrößertes Bild", contentScale = ContentScale.Fit,
+                            modifier = Modifier.fillMaxSize().graphicsLayer(scaleX = zoom, scaleY = zoom, translationX = offset.x, translationY = offset.y))
+                    }
+                    Text("Mit zwei Fingern zoomen und verschieben", modifier = Modifier.padding(16.dp))
+                }
+            }
+        }
+    }
 }
 @Composable internal fun PhotoReview(file: File, target: PhotoTarget, data: Data, busy: Boolean, close: () -> Unit, openAsset: (String) -> Unit, save: (Data) -> Unit) {
     var result by remember { mutableStateOf<String?>(null) }; var error by remember { mutableStateOf<String?>(null) }
@@ -102,7 +142,6 @@ val LocalImageLoader = staticCompositionLocalOf<suspend (String) -> ByteArray> {
         try { result = when (target.kind) { "meter" -> recognizeMeter(file); "asset" -> readAssetCode(file); "profile" -> compactPhoto(file, 384, MAX_PROFILE_IMAGE_BYTES); else -> compactPhoto(file) } }
         catch (_: Exception) { error = "Foto konnte nicht verarbeitet werden. Bitte erneut aufnehmen oder den Zählerstand manuell eingeben." }
     }
-    DisposableEffect(file.path) { onDispose { file.delete() } }
     if (target.kind == "asset") {
         val asset = result?.let { matchAssetCode(data, it) }
         Form("Anlage erkennen", asset != null && !busy, close, { asset?.let { openAsset(it.id) } }, confirmLabel = "Anlagenakte öffnen") {

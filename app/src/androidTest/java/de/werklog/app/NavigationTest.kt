@@ -17,7 +17,7 @@ class NavigationTest {
         context.filesDir.listFiles()?.forEach { it.deleteRecursively() }
         context.getSharedPreferences("onboarding", 0).edit().clear().commit()
         context.getSharedPreferences("biometric", 0).edit().clear().commit()
-        ActivityScenario.launch(MainActivity::class.java).use {
+        ActivityScenario.launch(MainActivity::class.java).use { scenario ->
             ui.onNodeWithText("Passwort", substring = false).performTextInput("Testpasswort2026")
             ui.onNodeWithText("Passwort wiederholen").performTextInput("Testpasswort2026")
             ui.onNodeWithText("Tresor erstellen").performClick()
@@ -63,6 +63,57 @@ class NavigationTest {
             ui.onNodeWithText("Passwort", substring = false).performTextInput("NeuesPasswort2026")
             ui.onNodeWithText("Entsperren", substring = false).performClick()
             ui.waitUntil(15000) { ui.onAllNodesWithText("Hallo, Alex Test.").fetchSemanticsNodes().isNotEmpty() }
+            ui.onNodeWithText("Betrieb", useUnmergedTree = true).performClick()
+            ui.onNodeWithText("Anleitungen", substring = false).performClick()
+            ui.onNodeWithText("+ Anleitung").performScrollTo().performClick()
+            ui.onNodeWithText("Titel *").performTextInput("Pumpenprüfung")
+            ui.onNodeWithText("Speichern").performClick()
+            ui.waitUntil(10000) { ui.onAllNodesWithText("+ Nächster Schritt").fetchSemanticsNodes().isNotEmpty() }
+            lateinit var scenarioModel: WorkModel
+            scenario.onActivity { scenarioModel = androidx.lifecycle.ViewModelProvider(it)[WorkModel::class.java] }
+            for ((index, name) in listOf("Vorbereiten", "Kontrollieren").withIndex()) {
+                ui.onNodeWithText("+ Nächster Schritt").assertIsDisplayed().performClick()
+                ui.onNodeWithText("Schritt *").performTextInput(name)
+                ui.onNodeWithText("Speichern").performClick()
+                ui.waitUntil(10000) { !scenarioModel.busy && scenarioModel.data!!.work.guides.last().steps.size == index + 1 }
+            }
+            ui.onNodeWithText("Anleitungseinstellungen").performScrollTo()
+            ui.onNodeWithText("+ Nächster Schritt").assertIsDisplayed()
+            var capture: File? = null
+            scenario.onActivity { activity ->
+                val model = androidx.lifecycle.ViewModelProvider(activity)[WorkModel::class.java]
+                val step = model.data!!.work.guides.last().steps.last()
+                val file = File(File(activity.cacheDir, "camera").apply { mkdirs() }, "test-capture.jpg")
+                val bitmap = android.graphics.Bitmap.createBitmap(1200, 800, android.graphics.Bitmap.Config.ARGB_8888)
+                bitmap.eraseColor(android.graphics.Color.BLUE)
+                file.outputStream().use { bitmap.compress(android.graphics.Bitmap.CompressFormat.JPEG, 90, it) }; bitmap.recycle()
+                capture = file
+                fun field(name: String, value: Any) { MainActivity::class.java.getDeclaredField(name).apply { isAccessible = true }.set(activity, value) }
+                field("photoFile", file); field("photoTarget", PhotoTarget("guide", step.id))
+                field("handoffUntil", android.os.SystemClock.elapsedRealtime() + 120000L)
+            }
+            scenario.moveToState(androidx.lifecycle.Lifecycle.State.CREATED)
+            scenario.recreate()
+            scenario.moveToState(androidx.lifecycle.Lifecycle.State.RESUMED)
+            scenario.onActivity { activity ->
+                org.junit.Assert.assertNotNull(androidx.lifecycle.ViewModelProvider(activity)[WorkModel::class.java].data)
+                org.junit.Assert.assertTrue(capture!!.isFile)
+                activity.completeCameraCapture(true)
+            }
+            ui.waitUntil(15000) { ui.onAllNodesWithText("Groß öffnen / vergrößern").fetchSemanticsNodes().isNotEmpty() }
+            ui.onNodeWithText("Groß öffnen / vergrößern").performScrollTo().performClick()
+            ui.onNodeWithContentDescription("Vergrößertes Bild").assertIsDisplayed()
+            ui.onNodeWithText("Schließen").performClick()
+            ui.onNodeWithText("Speichern").performClick()
+            ui.waitUntil(15000) { !scenarioModel.busy && scenarioModel.data!!.work.guides.last().steps.last().image.startsWith("img:") }
+            org.junit.Assert.assertFalse(capture!!.exists())
+            ui.waitForIdle()
+            scenario.onActivity { activity ->
+                val guide = androidx.lifecycle.ViewModelProvider(activity)[WorkModel::class.java].data!!.work.guides.last()
+                org.junit.Assert.assertEquals("", guide.steps.first().image)
+                org.junit.Assert.assertTrue(guide.steps.last().image.startsWith("img:"))
+            }
+
         }
     }
 }
